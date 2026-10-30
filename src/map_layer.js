@@ -207,6 +207,7 @@ function wireGestures() {
 // --- hook the game's view functions --------------------------------------------------------
 P = function (x, y) { if (!map) return [0, 0]; const p = map.project(toLL(x, y)); return [p.x, p.y]; };
 unP = function (sx, sy) { const ll = map.unproject([sx, sy]); return fromLL(ll.lng, ll.lat); };
+viewName = () => MODES[viewMode].name[0] + MODES[viewMode].name.slice(1).toLowerCase();
 toggleView = function () { viewMode = (viewMode + 1) % MODES.length; applyMode(); };
 toggleChart = function () { cam.chart = !cam.chart; for (const id of ['sec', 'tac']) map.setLayoutProperty(id, 'visibility', cam.chart ? 'visible' : 'none'); document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; };
 const AIR_LAYERS = ['e5', 'frz-fill', 'sua-hatch', 'vol-line', 'vol-dash', 'vlab', 'x-d', 'x-sua', 'x-b', 'x-moa', 'x-sfra'];

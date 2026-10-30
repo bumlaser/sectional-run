@@ -36,8 +36,8 @@
   .readout small { font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
   .readout b { font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
   .readout .tgt { font-size:11px; color:var(--accent); white-space:nowrap; }
-  #ctl .row2 { display:grid; grid-template-columns:repeat(9, minmax(0,1fr)); gap:5px; max-width:660px; width:100%; margin:0 auto; }
-  #ctl .row2 button { min-height:40px; font-size:12px; }
+  #ctl .row2 { display:flex; gap:5px; max-width:660px; width:100%; margin:0 auto; }
+  #ctl .row2 button { flex:1 1 auto; min-width:0; min-height:40px; font-size:11px; letter-spacing:.2px; padding:8px 3px; }
   #landBtn { max-width:660px; width:100%; margin:0 auto; font:700 16px var(--body); letter-spacing:.5px; background:var(--okL); color:#fff; min-height:46px; }
   .sheet { position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; justify-content:center; padding:0 12px calc(12px + env(safe-area-inset-bottom, 0px)); }
   .sheet .card { width:100%; max-width:560px; background:#fff; color:rgba(0,0,0,.87); border-radius:4px; box-shadow:0 -4px 24px rgba(0,0,0,.35), var(--shadow);
@@ -77,6 +77,16 @@
   table { border-collapse:collapse; width:calc(100% - 48px); font-size:14px; margin:10px 0; }
   td { padding:6px; border-bottom:1px solid var(--border); } td.pts { text-align:right; font-weight:bold; font-variant-numeric:tabular-nums; }
   .pos { color:#13803d; } .neg { color:#CA001B; }
+  #bSet { display:flex; align-items:center; justify-content:center; }
+  .set-row { display:grid; grid-template-columns:1fr auto; gap:4px 12px; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); }
+  .set-row b { font-size:15px; font-weight:500; } .set-row small { display:block; color:var(--subtle); font-size:12px; margin-top:2px; }
+  .sw { width:46px; height:26px; padding:0; border-radius:13px; background:#bdbdbd; box-shadow:none; position:relative; }
+  .sw::after { content:''; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.4); transition:left .15s; }
+  .sw.on { background:var(--primary); } .sw.on::after { left:23px; }
+  .seg { display:flex; border:1px solid var(--primary); border-radius:4px; overflow:hidden; }
+  .seg button { border-radius:0; box-shadow:none; background:#fff; color:var(--primary); padding:7px 10px; min-width:40px; }
+  .seg button + button { border-left:1px solid var(--primary); } .seg button.on { background:var(--primary); color:#fff; }
+  .set-btn { background:#fff; color:var(--primary); border:1px solid var(--primary); box-shadow:none; padding:7px 12px; }
   .grade { float:right; margin-left:12px; width:64px; height:64px; border-radius:50%; background:#fff; color:#005B4B; font:700 38px/64px var(--body); text-align:center; box-shadow:var(--shadow); }
   #map { position:fixed; inset:0; background:#dde8c6; }
   canvas#c { position:fixed; inset:0; pointer-events:none; z-index:1; }
@@ -104,13 +114,14 @@
     <button type="button" id="bRadio">RADIO</button>
     <button type="button" id="bView">CHASE</button>
     <button type="button" id="bChart">TAC</button>
-    <button type="button" id="bSpeed">8×</button>
+    <button type="button" id="bSpeed" hidden>8×</button>
     <button type="button" id="bZout" aria-label="Zoom out">−</button>
     <button type="button" id="bZin" aria-label="Zoom in">+</button>
     <button type="button" id="bAir" aria-label="Show or hide airspace" class="on">AIR</button>
     <button type="button" id="bNav" aria-label="Navigator">NAV</button>
     <button type="button" id="bInst" aria-label="Flight instruments">INST</button>
     <button type="button" id="bPause" aria-label="Pause">II</button>
+    <button type="button" id="bSet" aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg></button>
   </div>
 </div>
 <div id="toast" hidden></div>
@@ -130,11 +141,12 @@
       <li><b>NAV</b> opens the touchscreen navigator: GS, TRK, DIS and DTK, a moving map, the flight plan, nearest airports and Direct-To</li>
       <li>Keyboard: ← → heading bug, ↑ ↓ altitude, R radio, V 3D, C chart, X speed, N navigator, Q questions on/off, P pause, L land</li>
     </ul>
-    <label class="opt"><input type="checkbox" id="optQuiz" checked> Ask checkride questions along the way</label>
+    <label class="opt"><input type="checkbox" id="optQuiz"> Ask checkride questions along the way</label>
     <button class="go" id="startBtn" type="button" disabled>Loading chart…</button>
     <p class="fine">Terrain and MEFs come from AWS Terrain Tiles (USGS 3DEP, SRTM and others, via Mapzen). Airspace, airports, obstacles and VORs come from FAA ADDS data. Water and towns are traced from the FAA Baltimore–Washington TAC. Base map © OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors, Positron style. Airspace heights are drawn at 2× vertical scale. The SFRA and FRZ are approximate rings. This is a practice game: not for navigation, and no substitute for current charts, NOTAMs and SFRA training.</p>
   </div>
 </div>
+<div id="settings" class="overlay" hidden><div class="card" id="setCard"></div></div>
 <div id="end" class="overlay" hidden><div class="card" id="endCard"></div></div>
 
 <script>
@@ -782,8 +794,8 @@ function resize() { DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H 
 addEventListener('resize', resize); resize();
 const cam = { cx: 0, cy: 0, s: 20, T: 1, hz: 0, yc: .5, px: 0, py: 0, lastPan: -99, view: '2d', chart: false };
 let pl, game, simRate = 8, paused = false, running = false;
-let quizOn = true; try { quizOn = localStorage.getItem('sr.quiz') !== '0'; } catch (_) {}
-function setQuiz(on) { quizOn = on; try { localStorage.setItem('sr.quiz', on ? '1' : '0'); } catch (_) {} const cb = document.getElementById('optQuiz'); if (cb) cb.checked = on; }
+let quizOn = false; try { quizOn = localStorage.getItem('sr.quiz2') === '1'; } catch (_) {}
+function setQuiz(on) { quizOn = on; try { localStorage.setItem('sr.quiz2', on ? '1' : '0'); } catch (_) {} const cb = document.getElementById('optQuiz'); if (cb) cb.checked = on; }
 const hold = { left: false, right: false }, keys = {};
 const SUA_STATUS = {};
 function newGame() {
@@ -900,10 +912,9 @@ function posn(x, y) { const d = Math.hypot(pl.x - x, pl.y - y), b = brg(x, y, pl
 function openRadio() {
   const rows = facilities().map(f => { const st = f.g === 'B' && game.clrB ? '<span class="pos">CLEARED ✓</span>' : game.contact[f.g] ? '<span class="pos">TWO-WAY ✓</span>' : f.g === 'CTAF' && game.ctaf ? '<span class="pos">ANNOUNCED ✓</span>' : '';
     return `<div class="fac"><div><b>${f.name}</b> ${st}<br><small>${FREQ[f.name] ? FREQ[f.name] + ' · ' : ''}${f.note} · ${Math.hypot(pl.x - f.x, pl.y - f.y).toFixed(0)} NM</small></div><button type="button" data-call="${f.g}">${f.act}</button></div>`; }).join('');
-  const qrow = `<div class="fac"><div><b>Checkride questions</b><br><small>${quizOn ? 'on: questions pop up at chart features' : 'off: free flight, no questions'}</small></div><button type="button" data-call="QUIZ">${quizOn ? 'Turn off' : 'Turn on'}</button></div>`;
-  const fss = `<div class="fac"><div><b>Leesburg Radio (Flight Service)</b><br><small>122.200 · special use airspace status</small></div><button type="button" data-call="FSS">SUA status?</button></div>`;
+    const fss = `<div class="fac"><div><b>Leesburg Radio (Flight Service)</b><br><small>122.200 · special use airspace status</small></div><button type="button" data-call="FSS">SUA status?</button></div>`;
   const log = game.radioLog.slice(-4).map(m => `<p style="margin:4px 0;font-size:12px;color:${m.who === 'YOU' ? '#1F5493' : '#13803d'}">${m.who}: ${m.text}</p>`).join('');
-  document.getElementById('sheetCard').innerHTML = `<div class="kicker">RADIO · N421AP</div><h3>Who do you want to call?</h3>${rows || '<p>No approach, tower or CTAF in range.</p>'}${fss}${qrow}${log ? '<div style="margin-top:10px">' + log + '</div>' : ''}<div class="actions"><button type="button" data-close>Close</button></div>`;
+  document.getElementById('sheetCard').innerHTML = `<div class="kicker">RADIO · N421AP</div><h3>Who do you want to call?</h3>${rows || '<p>No approach, tower or CTAF in range.</p>'}${fss}${log ? '<div style="margin-top:10px">' + log + '</div>' : ''}<div class="actions"><button type="button" data-close>Close</button></div>`;
   showSheet(true);
 }
 function call(g) {
@@ -1198,6 +1209,32 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; hold.left = hold.right = false; });
 function setTgt(d) { pl.tgt = clamp(pl.tgt + d, 1000, 12500); }
 function zoom(f) { cam.s = clamp(cam.s * f, 5, 160); }
+// ---------------- settings (cog button) ----------------
+function viewName() { return cam.view === '2d' ? '2D' : '3D'; }
+function openSettings() {
+  const sw = (id, on) => `<button type="button" class="sw ${on ? 'on' : ''}" data-set="${id}" role="switch" aria-checked="${on}" aria-label="${id}"></button>`;
+  const row = (title, sub, ctl) => `<div class="set-row"><div><b>${title}</b><small>${sub}</small></div>${ctl}</div>`;
+  const speeds = [1, 4, 8, 16].map(r => `<button type="button" data-set="speed" data-v="${r}" class="${simRate === r ? 'on' : ''}">${r}×</button>`).join('');
+  document.getElementById('setCard').innerHTML = `<header class="bs-head"><h1>Settings</h1><h2>The flight is paused while this is open</h2></header>
+    ${row('Checkride questions', quizOn ? 'Questions pop up at chart features' : 'Free flight, no questions', sw('quiz', quizOn))}
+    ${row('Airspace', airOn ? 'Shown. The rules always apply' : 'Hidden. The rules still apply', sw('air', airOn))}
+    ${typeof terrainOn !== 'undefined' && typeof setTerrainOn === 'function' ? row('3D terrain', 'Hills and valleys from elevation data', sw('terrain', terrainOn)) : ''}
+    ${nav ? row('Navigator', 'The panel-mount GPS unit (also the NAV button)', sw('nav', nav.visible)) : ''}
+    ${row('Sim speed', 'How fast time passes', `<div class="seg">${speeds}</div>`)}
+    ${row('Camera', `Current view: ${viewName()}`, '<button type="button" class="set-btn" data-set="view">Change</button>')}
+    <div class="actions" style="margin-top:16px"><button type="button" class="go" data-set="close">Done</button></div>`;
+  document.getElementById('settings').hidden = false;
+}
+document.getElementById('settings').addEventListener('click', e => {
+  if (e.target.id === 'settings') return void (document.getElementById('settings').hidden = true);   // tap outside the card
+  const b = e.target.closest('[data-set]'); if (!b) return; const k = b.dataset.set;
+  if (k === 'close') return void (document.getElementById('settings').hidden = true);
+  if (k === 'quiz') setQuiz(!quizOn); else if (k === 'air') setAir(!airOn); else if (k === 'terrain') setTerrainOn(!terrainOn);
+  else if (k === 'nav' && nav) document.getElementById('bNav').classList.toggle('on', nav.toggle());
+  else if (k === 'speed') { simRate = +b.dataset.v; document.getElementById('bSpeed').textContent = simRate + '×'; }
+  else if (k === 'view') toggleView();
+  openSettings();
+});
 function toggleView() { cam.view = cam.view === '2d' ? '3d' : '2d'; document.getElementById('bView').textContent = cam.view === '2d' ? '3D' : '2D'; }
 function toggleChart() { cam.chart = !cam.chart; document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; }
 function cycleSpeed() { const r = [1, 4, 8, 16]; simRate = r[(r.indexOf(simRate) + 1) % r.length]; document.getElementById('bSpeed').textContent = simRate + '×'; }
@@ -1207,7 +1244,7 @@ holdBtn('bLeft', 'left'); holdBtn('bRight', 'right');
 const tap = (id, f) => document.getElementById(id).addEventListener('click', f);
 tap('bUp', () => setTgt(500)); tap('bDown', () => setTgt(-500)); tap('bRadio', () => running && !game.over && openRadio()); tap('bView', () => toggleView()); tap('bChart', () => toggleChart());
 tap('bSpeed', cycleSpeed); tap('bZin', () => zoom(1.4)); tap('bZout', () => zoom(1 / 1.4)); tap('bPause', togglePause); tap('bNav', () => { if (nav) document.getElementById('bNav').classList.toggle('on', nav.toggle()); });
-tap('bAir', () => setAir(!airOn));
+tap('bAir', () => setAir(!airOn)); tap('bSet', openSettings);
 tap('bInst', () => { if (six) document.getElementById('bInst').classList.toggle('on', six.toggle()); }); tap('landBtn', land);
 document.getElementById('sheetCard').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.opt !== undefined) answerQuiz(+t.dataset.opt); else if (t.dataset.call) call(t.dataset.call); else if (t.hasAttribute('data-close')) closeSheet(); });
 function showSheet(on) { document.getElementById('sheet').hidden = !on; }
@@ -1258,7 +1295,7 @@ function navData() {
     map: { range: 20, hdg: pl.hdg, items: AIRPORTS.filter(a => d2(a) < 30).map(a => ({ id: a.id, dx: a.x - pl.x, dy: a.y - pl.y, tw: !!a.tw })), leg: [[o[0] - pl.x, o[1] - pl.y], [wp.x - pl.x, wp.y - pl.y]] },
     com: { active: { name: game.lastFac, freq: FREQ[game.lastFac] }, standby: stby ? { name: stby.name, freq: FREQ[stby.name] } : { name: 'Guard', freq: FREQ.Guard } }, xpdr: { code: game.contact.B ? '4211' : '1200', mode: 'ALT' }, phase: d2(START) < 30 || d2(DEST) < 30 ? 'TERM' : 'ENR', navaid: vor, nav: { active: vf(vors[0]), standby: vf(vors[1]) }, msgs: game.radioLog,
     tfc: FEATURES.traffic && typeof setTraffic === 'function' ? { on: TRAFFIC.on, status: TRAFFIC.status } : null,
-    utils: [{ id: 'bugdtk', label: 'Heading bug to DTK', value: hdg3(norm(brg(o[0], o[1], wp.x, wp.y) + VAR)) + '°' }, ...(typeof terrainOn !== 'undefined' ? [{ id: 'terrain', label: '3D terrain', value: terrainOn ? 'ON' : 'OFF' }] : []), { id: 'quiz', label: 'Checkride questions', value: quizOn ? 'ON' : 'OFF' }, { id: 'air', label: 'Airspace drawing', value: airOn ? 'SHOWN' : 'HIDDEN' }, ...(FEATURES.traffic && typeof setTraffic === 'function' ? [{ id: 'traffic', label: 'Live traffic (ADS-B)', value: TRAFFIC.on ? TRAFFIC.status.toUpperCase() : 'OFF' }] : []), { id: 'speed', label: 'Sim speed', value: simRate + '×' }, { id: 'view', label: 'Camera / view', value: 'CYCLE' }, { id: 'fpl', label: 'Restore flight plan', value: `${START.id}→${DEST.id}` }],
+    utils: [{ id: 'bugdtk', label: 'Heading bug to DTK', value: hdg3(norm(brg(o[0], o[1], wp.x, wp.y) + VAR)) + '°' }, { id: 'fpl', label: 'Restore flight plan', value: `${START.id}→${DEST.id}` }],
   };
 }
 function initNav() {
@@ -1300,7 +1337,7 @@ const rHdg = document.getElementById('rHdg'), rAlt = document.getElementById('rA
 function frame(now) {
   const rdt = Math.min(.05, (now - last) / 1000); last = now;
   if (running && game) {
-    const frozen = paused || game.over || !document.getElementById('sheet').hidden;
+    const frozen = paused || game.over || !document.getElementById('sheet').hidden || !document.getElementById('settings').hidden;
     if (!frozen) { let t = rdt * simRate; while (t > 0) { const d = Math.min(t, .25); step(d); t -= d; } }
     for (const f of flashes) f.life -= rdt; while (flashes.length && flashes[0].life <= 0) flashes.shift();
     const tT = cam.view === '3d' ? .5 : 1, tH = cam.view === '3d' ? cam.s * .0011 + .008 : 0, tY = cam.view === '3d' ? .7 : .5, k = Math.min(1, rdt * 4);
@@ -1552,6 +1589,7 @@ function wireGestures() {
 // --- hook the game's view functions --------------------------------------------------------
 P = function (x, y) { if (!map) return [0, 0]; const p = map.project(toLL(x, y)); return [p.x, p.y]; };
 unP = function (sx, sy) { const ll = map.unproject([sx, sy]); return fromLL(ll.lng, ll.lat); };
+viewName = () => MODES[viewMode].name[0] + MODES[viewMode].name.slice(1).toLowerCase();
 toggleView = function () { viewMode = (viewMode + 1) % MODES.length; applyMode(); };
 toggleChart = function () { cam.chart = !cam.chart; for (const id of ['sec', 'tac']) map.setLayoutProperty(id, 'visibility', cam.chart ? 'visible' : 'none'); document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; };
 const AIR_LAYERS = ['e5', 'frz-fill', 'sua-hatch', 'vol-line', 'vol-dash', 'vlab', 'x-d', 'x-sua', 'x-b', 'x-moa', 'x-sfra'];

@@ -108,6 +108,10 @@ The HDG knob works in both modes.
 `{ nav: true, six: false, info: false, traffic: false }`. Those are the navigator (back on), the six-pack/glass
 instruments, tap-for-info and live traffic. Set one to `true` and rebuild to bring it back.
 
+The **cog** button at the end of the dock opens Settings, which pauses the flight while it's open. It has
+Checkride questions (off by default), Airspace, 3D terrain (3D build), Navigator, Sim speed and Camera.
+The navigator's Utilities page keeps only navigation functions: heading bug to DTK, and restore flight plan.
+
 The **AIR** button (or the A key) shows and hides the airspace drawing. Airspace starts hidden. The airspace rules
 always apply, hidden or not.
 
