@@ -159,30 +159,51 @@ function updatePlane() {
   map.getSource('planeFx').setData(fc(fx));
 }
 function applyMode() {
-  const m = MODES[viewMode], three = viewMode !== 0;
+  const three = viewMode !== 0;
   if (map.getSource('dem')) map.setTerrain(three && terrainOn ? { source: 'dem', exaggeration: EX } : null);
   for (const id of ['x-sfra', 'x-moa', 'x-b', 'x-sua', 'x-d', 'obs3']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', three ? 'visible' : 'none');
-  if (viewMode === 2) { map.dragRotate.enable(); map.touchZoomRotate.enableRotation(); map.touchPitch.enable(); }
-  else { map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.touchPitch.disable(); }
-  if (viewMode !== 2) map.easeTo({ pitch: m.pitch, bearing: viewMode === 1 ? pl.hdg : 0, duration: 700 });
-  else map.easeTo({ pitch: m.pitch, duration: 700 });
-  document.getElementById('bView').textContent = m.name;
+  if (viewMode === 2) { CAM.bearing = map.getBearing(); CAM.pitchT = MODES[2].pitch; }
+  document.getElementById('bView').textContent = MODES[viewMode].name;
 }
-let camBusyUntil = 0;
+// The follow camera owns the view: jumpTo() cancels MapLibre's own gestures, so wheel, pinch and drag are handled here
+// and folded into the camera each frame.
+const CAM = { zoomT: 10.3, zoom: 10.3, bearing: 112, pitchT: 62, pitch: 62, pan: 0 };
 function updateCamera() {
-  if (performance.now() < camBusyUntil) return;
-  const c = toLL(pl.x, pl.y), opts = { center: c, padding: { top: viewMode === 0 ? 0 : Math.round(H * .3), bottom: 0, left: 0, right: 0 } };
-  if (viewMode === 1) { opts.bearing = pl.hdg; opts.pitch = MODES[1].pitch; }
-  if (viewMode === 0) { opts.bearing = 0; opts.pitch = 0; }
-  map.jumpTo(opts);
+  const k = .22, padTop = viewMode === 0 ? 0 : Math.round(H * .3);
+  CAM.zoom += (CAM.zoomT - CAM.zoom) * k;
+  const tb = viewMode === 1 ? pl.hdg : viewMode === 0 ? 0 : CAM.bearing, tp = viewMode === 0 ? 0 : viewMode === 1 ? MODES[1].pitch : CAM.pitchT;
+  const cb = map.getBearing(), db = ((tb - cb + 540) % 360) - 180;
+  map.jumpTo({ center: toLL(pl.x + cam.px, pl.y + cam.py), zoom: CAM.zoom, bearing: cb + db * (viewMode === 2 ? .5 : .25), pitch: map.getPitch() + (tp - map.getPitch()) * k,
+    padding: { top: padTop, bottom: 0, left: 0, right: 0 } });
 }
-
+function wireGestures() {
+  for (const h of ['scrollZoom', 'boxZoom', 'dragRotate', 'dragPan', 'keyboard', 'doubleClickZoom', 'touchZoomRotate', 'touchPitch']) map[h].disable();
+  const el = map.getCanvasContainer(), pts = new Map(); let g = null;
+  el.addEventListener('wheel', e => { e.preventDefault(); CAM.zoomT = clamp(CAM.zoomT - e.deltaY * (e.deltaMode ? .05 : .0022), 5.5, 15.5); }, { passive: false });
+  const two = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), a: Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; };
+  el.addEventListener('pointerdown', e => { pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    g = pts.size === 2 ? { ...two(), z: CAM.zoomT, b: CAM.bearing } : { x: e.clientX, y: e.clientY, btn: e.button, moved: false }; });
+  el.addEventListener('pointermove', e => {
+    const p = pts.get(e.pointerId); if (!p || !g) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+    if (pts.size === 2 && g.d) { const t = two(); CAM.zoomT = clamp(g.z + Math.log2(t.d / g.d), 5.5, 15.5);
+      if (viewMode === 2) { let da = t.a - g.a; if (da > 180) da -= 360; if (da < -180) da += 360; CAM.bearing = g.b - da; } return; }
+    if (pts.size !== 1) return;
+    if (Math.hypot(e.clientX - g.x, e.clientY - g.y) > 4) g.moved = true; if (!g.moved) return;
+    if (viewMode === 2 && !e.shiftKey && g.btn !== 1) { CAM.bearing += dx * .35; CAM.pitchT = clamp(CAM.pitchT - dy * .25, 0, 78); return; }
+    // look around: move the view centre by the ground distance under the pointer
+    const a = map.unproject([e.clientX - dx, e.clientY - dy]), b = map.unproject([e.clientX, e.clientY]), [ax, ay] = fromLL(a.lng, a.lat), [bx, by] = fromLL(b.lng, b.lat);
+    cam.px -= bx - ax; cam.py -= by - ay; cam.lastPan = performance.now();
+  });
+  const up = e => { pts.delete(e.pointerId); g = pts.size === 1 ? { ...[...pts.values()][0], moved: true } : null; };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
 // --- hook the game's view functions --------------------------------------------------------
 P = function (x, y) { if (!map) return [0, 0]; const p = map.project(toLL(x, y)); return [p.x, p.y]; };
 unP = function (sx, sy) { const ll = map.unproject([sx, sy]); return fromLL(ll.lng, ll.lat); };
-toggleView = function () { viewMode = (viewMode + 1) % MODES.length; camBusyUntil = performance.now() + 750; applyMode(); };
+toggleView = function () { viewMode = (viewMode + 1) % MODES.length; applyMode(); };
 toggleChart = function () { cam.chart = !cam.chart; map.setLayoutProperty('tac', 'visibility', cam.chart ? 'visible' : 'none'); document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; };
-zoom = function (f) { map.easeTo({ zoom: map.getZoom() + Math.log2(f) * 1.2, duration: 250 }); };
+zoom = function (f) { CAM.zoomT = clamp(CAM.zoomT + Math.log2(f) * 1.2, 5.5, 15.5); };
 render = function () {
   if (!mapReady || !pl) return;
   updateCamera();
@@ -196,7 +217,7 @@ render = function () {
     map = new maplibregl.Map({ container: 'map', style: sectionalTint(style), center: c, zoom: 10.3, pitch: 62, bearing: 112, maxPitch: 78, dragPan: false, keyboard: false,
       pixelRatio: Math.min(devicePixelRatio || 1, 1.5),   // full Retina resolution costs a lot of GPU for little gain here
       attributionControl: { compact: true }, fadeDuration: 0 });
-    map.on('load', () => { addLayers(); mapReady = true; mapReadyHook(); });
+    map.on('load', () => { addLayers(); wireGestures(); mapReady = true; mapReadyHook(); });
     map.on('click', e => info(e.point.x, e.point.y));
   }).catch(err => { document.getElementById('startBtn').textContent = 'Map tiles unavailable'; console.error(err); });
 })();

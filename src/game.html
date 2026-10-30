@@ -100,7 +100,7 @@
     <div class="notam" id="briefNotam"></div>
     <ul>
       <li><b>◀ ▶</b> (hold) set the heading bug, and the plane turns to it at standard rate · <b>▲ ▼</b> change target altitude by 500 ft</li>
-      <li><b>INST</b> shows a draggable six-pack. Turn its <b>HDG knob</b> to set the bug, or tap the knob to sync it to your heading</li>
+      <li><b>INST</b> shows draggable flight instruments, as a six-pack or a <b>GLASS</b> EADI and EHSI (switch in the panel's top bar). Turn its <b>HDG knob</b> to set the bug, or tap the knob to sync it to your heading</li>
       <li><b>RADIO</b> call Potomac Approach, a tower, or self-announce on the CTAF</li>
       <li><b>3D</b> shows the airspace as stacked slabs · <b>TAC</b> swaps in the real FAA chart</li>
       <li>Tap anything on the map to find out what it is · pinch or <b>− +</b> to zoom · drag to look around</li>
@@ -673,13 +673,20 @@ function initNav() {
   document.getElementById('bNav').classList.toggle('on', nav.visible);
   if (typeof SixPack !== 'undefined') {
     let sp = null; try { sp = JSON.parse(localStorage.getItem('sr.sixpos') || 'null'); } catch (_) {}
-    six = new SixPack({ mount: document.body, open: W >= 1200, position: sp || undefined,
+    let sm = 'six'; try { sm = localStorage.getItem('sr.sixmode') || 'six'; } catch (_) {}
+    six = new SixPack({ mount: document.body, open: W >= 1200, position: sp || undefined, mode: sm, onMode: m => { try { localStorage.setItem('sr.sixmode', m); } catch (_) {} },
       onBug: deg => { if (pl) pl.bug = norm(deg - VAR); },
       onMove: p => { try { localStorage.setItem('sr.sixpos', JSON.stringify(p)); } catch (_) {} } });
     document.getElementById('bInst').classList.toggle('on', six.visible);
   } else document.getElementById('bInst').hidden = true;
 }
-function sixTick() { if (six && pl && six.visible) six.update({ ias: TAS, pitch: pl.patt, roll: pl.bank, alt: pl.alt, baro: 29.92, turn: pl.rate, slip: 0, hdg: norm(pl.hdg + VAR), bug: norm(pl.bug + VAR), vs: pl.vs * 60 }); }
+function sixTick() {
+  if (!six || !pl || !game || !game.nav || !six.visible) return;
+  const N = game.nav, wp = ANY(N.wpt) || DEST, o = N.origin, crs = brg(o[0], o[1], wp.x, wp.y);
+  const fromO = Math.hypot(pl.x - o[0], pl.y - o[1]), xtk = fromO * Math.sin((brg(o[0], o[1], pl.x, pl.y) - crs) * D2R);   // + = right of course
+  six.update({ ias: TAS, pitch: pl.patt, roll: pl.bank, alt: pl.alt, baro: 29.92, turn: pl.rate, slip: 0, hdg: norm(pl.hdg + VAR), bug: norm(pl.bug + VAR), vs: pl.vs * 60,
+    altSel: pl.tgt, crs: norm(crs + VAR), dev: clamp(-xtk / 2, -1, 1), brg: norm(brg(pl.x, pl.y, wp.x, wp.y) + VAR), dist: d2(wp) });   // CDI full scale ±2 NM
+}
 function navTick(now) { if (!nav || !game || !game.nav || !nav.visible || now - navT < 250) return; navT = now; nav.update(navData()); }
 
 // ====================================================================

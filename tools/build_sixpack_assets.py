@@ -4,9 +4,9 @@ Usage: python3 tools/build_sixpack_assets.py <path to an svgo-optimised copy of 
 import base64, os, sys, json
 src = sys.argv[1]
 out = {}
-for d in ['ai', 'alt', 'asi', 'hi', 'tc', 'vsi']:
+for d in ['ai', 'alt', 'asi', 'hi', 'tc', 'vsi', 'eadi', 'ehsi']:
     for f in sorted(os.listdir(os.path.join(src, d))):
-        if f.endswith('.svg') and f != d + '.svg':
+        if f.endswith('.svg') and f != d + '.svg':   # skip the preview composites
             out[f[:-4]] = 'data:image/svg+xml;base64,' + base64.b64encode(open(os.path.join(src, d, f), 'rb').read()).decode()
 lic = open('third_party/qfi/LICENSE').read().strip().replace('*/', '* /')
 js = f"/* Six-pack instrument artwork from QFlightInstruments, https://github.com/marek-cel/QFlightinstruments\n{lic}\n*/\nwindow.SIXPACK_SVG = {json.dumps(out, separators=(',', ':'))};\n"

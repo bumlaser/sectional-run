@@ -44,12 +44,23 @@ Qt code. `tools/build_sixpack_assets.py` packs svgo-optimized copies of the SVGs
 
 ```js
 const six = new SixPack({ mount: document.body, onBug: deg => { /* new heading bug, magnetic */ } });
-six.update({ ias, pitch, roll, alt, baro, turn, slip, hdg, bug, vs });
+six.update({ ias, pitch, roll, alt, baro, turn, slip, hdg, bug, vs, altSel, crs, dev, brg, dist });
+six.setMode('glass');   // or 'six'
 ```
 
 The heading indicator has a **heading-bug knob**. Drag it round, scroll on it, or tap it to sync the bug to the
 current heading. The plane now flies to the bug at standard rate, and the dock's ◀ ▶ buttons and the arrow keys move
 the bug as well. The navigator's Utilities page can set the bug to the active DTK.
+
+### Glass mode
+
+The **SIX · GLASS** switch in the panel's top bar swaps the round gauges for the QFlightInstruments **EADI** and **EHSI**.
+They're drawn on canvas from the same SVG layers, using the Qt widgets' positions, pivot points and scaling:
+- **EADI:** pitch ladder and roll scale, airspeed and altitude tapes (scrolling, with live labels), an altitude bug at
+  your target altitude, the VSI bar, and a heading arc with the bug.
+- **EHSI:** compass card, course arrow on the active DTK, CDI bar (±2 NM full scale), bearing pointer to the waypoint, and HDG/CRS/DME readouts.
+
+The HDG knob works in both modes.
 
 ## Terrain and MEFs
 
