@@ -83,6 +83,25 @@ They're drawn on canvas from the same SVG layers, using the Qt widgets' position
 
 The HDG knob works in both modes.
 
+## Feature switches and parked features
+
+`FEATURES` near the top of `src/game.html` switches parked features off without deleting them:
+`{ nav: false, six: false, info: false, traffic: false }`. Those are the navigator, the six-pack/glass
+instruments, tap-for-info and live traffic. Set one to `true` and rebuild to bring it back.
+
+The **AIR** button (or the A key) shows and hides the airspace drawing. The airspace rules always apply, hidden
+or not.
+
+## Wind
+
+Wind is random for each session (each page load) and the same everywhere for now. It's usually light to
+moderate and mostly westerly to northwesterly, sometimes gusty, and occasionally calm. Code always reads it
+through `windAt(x, y)`, so live AWOS/METAR wind per airport can be swapped in later. It shows in two places:
+- **Wind widget:** a corner widget with an arrow for which way the wind blows across the screen, plus the
+  magnetic wind (for example `240° 12G18 KT`).
+- **Windsocks:** a sock beside each airport once you zoom in. It points downwind however the map is rotated or
+  tilted, stands straight out at 15 kt, droops in light wind and flutters in gusts.
+
 ## Mothballed features
 
 - **Fighter intercepts and DC FRZ SAMs** (AIM 5-6-13 intercept procedure, warning flares, cartoon missiles) live on

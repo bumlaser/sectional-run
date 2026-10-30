@@ -143,6 +143,7 @@ function addLayers() {
   map.addLayer({ id: 'vlab', type: 'symbol', source: 'vlab', layout: { 'text-field': ['get', 't'], 'text-font': font, 'text-size': ['match', ['get', 'k'], 'B', 13, 'D', 13, 12], 'text-line-height': 1.05, 'text-allow-overlap': false },
     paint: { 'text-color': ['get', 'col'], 'text-halo-color': 'rgba(255,255,255,.9)', 'text-halo-width': 1.8 } });
   applyMode();
+  if (!airOn) for (const id of AIR_LAYERS) map.setLayoutProperty(id, 'visibility', 'none');
 }
 const PLANE_SHAPE = [ // top view, metres for a 1-unit wingspan, nose toward -y
   [[0, -.5], [.07, -.42], [.08, -.12], [.5, -.1], [.5, .02], [.07, .04], [.04, .36], [.2, .38], [.2, .46], [-.2, .46], [-.2, .38], [-.04, .36], [-.07, .04], [-.5, .02], [-.5, -.1], [-.08, -.12], [-.07, -.42]]];
@@ -208,12 +209,15 @@ P = function (x, y) { if (!map) return [0, 0]; const p = map.project(toLL(x, y))
 unP = function (sx, sy) { const ll = map.unproject([sx, sy]); return fromLL(ll.lng, ll.lat); };
 toggleView = function () { viewMode = (viewMode + 1) % MODES.length; applyMode(); };
 toggleChart = function () { cam.chart = !cam.chart; for (const id of ['sec', 'tac']) map.setLayoutProperty(id, 'visibility', cam.chart ? 'visible' : 'none'); document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; };
+const AIR_LAYERS = ['e5', 'frz-fill', 'sua-hatch', 'vol-line', 'vol-dash', 'vlab', 'x-d', 'x-sua', 'x-b', 'x-moa', 'x-sfra'];
+const setAir2D = setAir;
+setAir = function (on) { setAir2D(on); if (map && mapReady) for (const id of AIR_LAYERS) map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none'); };
 zoom = function (f) { CAM.zoomT = clamp(CAM.zoomT + Math.log2(f) * 1.2, 5.5, 15.5); };
 render = function () {
   if (!mapReady || !pl) return;
   updateCamera();
   const now = performance.now(); if (now - planeT > 50) { planeT = now; updatePlane(); }   // ~20 Hz: rebuilding the plane geometry every frame is the costliest part
-  if (typeof trafficTick === 'function') trafficTick(now);
+  if (FEATURES.traffic && typeof trafficTick === 'function') trafficTick(now);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
   drawHUD();
 };
@@ -223,7 +227,7 @@ render = function () {
     map = new maplibregl.Map({ container: 'map', style: sectionalTint(style), center: c, zoom: 10.3, pitch: 62, bearing: 112, maxPitch: 78, dragPan: false, keyboard: false,
       pixelRatio: Math.min(devicePixelRatio || 1, 1.5),   // full Retina resolution costs a lot of GPU for little gain here
       attributionControl: { compact: true }, fadeDuration: 0 });
-    map.on('load', () => { addLayers(); if (typeof initTraffic === 'function') initTraffic(map); wireGestures(); mapReady = true; mapReadyHook(); });
+    map.on('load', () => { addLayers(); if (FEATURES.traffic && typeof initTraffic === 'function') initTraffic(map); wireGestures(); mapReady = true; mapReadyHook(); });
     map.on('click', e => info(e.point.x, e.point.y));
   }).catch(err => { document.getElementById('startBtn').textContent = 'Map tiles unavailable'; console.error(err); });
 })();

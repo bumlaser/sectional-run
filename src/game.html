@@ -84,6 +84,7 @@
     <button type="button" id="bSpeed">8×</button>
     <button type="button" id="bZout" aria-label="Zoom out">−</button>
     <button type="button" id="bZin" aria-label="Zoom in">+</button>
+    <button type="button" id="bAir" aria-label="Show or hide airspace" class="on">AIR</button>
     <button type="button" id="bNav" aria-label="Navigator">NAV</button>
     <button type="button" id="bInst" aria-label="Flight instruments">INST</button>
     <button type="button" id="bPause" aria-label="Pause">II</button>
@@ -117,6 +118,8 @@
 <script>
 'use strict';
 const WD = __WORLD__;
+// Feature switches. Parked features keep their code; flip one to true to bring it back.
+const FEATURES = { nav: false, six: false, info: false, traffic: false };
 const TAC_SRC = '__TAC__';
 // ====================================================================
 //  Helpers
@@ -142,6 +145,19 @@ const toNM = (lat, lon) => [(lon - WD.reg.clon) * 60 * WD.reg.cos, -(lat - WD.re
 // ====================================================================
 const R = WD.reg, WORLD = { x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1 };
 const AIRPORTS = WD.aps, AP = Object.fromEntries(AIRPORTS.map(a => [a.id, a]));
+// ====================================================================
+//  Wind: randomised once per session (page load), the same everywhere for now. Always read it through windAt(),
+//  so live AWOS/METAR wind per airport can replace this later. dir is TRUE, "from"; magnetic is for display.
+// ====================================================================
+const WIND = (() => {
+  const r = Math.random;
+  if (r() < .08) return { dir: 0, spd: 0, gust: 0, src: 'session' };                                    // calm
+  const dir = r() < .6 ? 230 + r() * 110 : r() * 360;                                                     // mostly westerly to northwesterly, as here
+  const spd = Math.round(4 + 14 * Math.pow(r(), 1.6)), gust = spd >= 10 && r() < .35 ? spd + 5 + Math.round(r() * 7) : 0;
+  return { dir: Math.round(dir / 10) * 10 % 360 || 360, spd, gust, src: 'session' };
+})();
+function windAt(x, y) { return WIND; }
+const windMag = w => w.spd < 3 ? 'CALM' : `${hdg3(Math.round(norm(w.dir + VAR) / 10) * 10)}° ${w.spd}${w.gust ? 'G' + w.gust : ''} KT`;
 const START = AP.FDK, DEST = AP.W29;
 // frequencies read from the FAA Baltimore–Washington TAC
 const FREQ = { 'Frederick Tower': '132.400', 'Potomac Approach': '128.700', 'Martin State Tower': '121.300', 'Easton Tower': '118.525', 'Hagerstown Tower': '120.300',
@@ -434,7 +450,10 @@ function label(text, x, y, color, size = 11, weight = 'bold', align = 'center') 
 }
 function frac(top, bot, x, y, color) { label(top, x, y - 7, color, 12, '900'); ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 11, y); ctx.lineTo(x + 11, y); ctx.stroke(); label(bot, x, y + 8, color, 12, '900'); }
 function ringsPath(rings, z = 0) { ctx.beginPath(); for (const r of rings) { r.forEach(([x, y], i) => { const [a, b] = P(x, y, z); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); }); ctx.closePath(); } }
-function visibleVol(v) { const [a, b] = P(v.bb[0], v.bb[1]), [c, d] = P(v.bb[2], v.bb[3]); return c > -50 && a < W + 50 && d > -50 && b < H + 50; }
+// Airspace drawing can be hidden; the rules (insideVol checks) always apply.
+let airOn = true; try { airOn = localStorage.getItem('sr.air') !== '0'; } catch (_) {}
+function setAir(on) { airOn = on; try { localStorage.setItem('sr.air', on ? '1' : '0'); } catch (_) {} document.getElementById('bAir').classList.toggle('on', on); }
+function visibleVol(v) { if (!airOn) return false; const [a, b] = P(v.bb[0], v.bb[1]), [c, d] = P(v.bb[2], v.bb[3]); return c > -50 && a < W + 50 && d > -50 && b < H + 50; }
 
 function drawBase() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = '#6d8a52'; ctx.fillRect(0, 0, W, H);
@@ -560,7 +579,47 @@ function airspaceNow() {
   const bad = ins.some(v => (v.k === 'B' && !game.clrB) || v.k === 'P' || v.k === 'SFRA' || v.k === 'FRZ' || (v.k === 'R' && SUA_STATUS[v.grp]) || (v.k === 'D' && !game.contact[v.grp]));
   return { main, note, bad };
 }
+// Windsock beside each airport once you're zoomed in close enough to see the field. The direction comes from
+// projecting a downwind ground offset through P(), so it stays right however the map is rotated or tilted.
+function drawWindsocks() {
+  const now = performance.now() / 1000;
+  for (const a of AIRPORTS) {
+    const sx = a.x + .22, sy = a.y - .18, [bx, by] = P(sx, sy); if (bx < -40 || bx > W + 40 || by < -60 || by > H + 40) continue;
+    const [ex, ey] = P(sx + 1, sy), k = Math.hypot(ex - bx, ey - by); if (k < 45) continue;   // px per NM
+    const w = windAt(sx, sy), to = (w.dir + 180) * D2R, [tx, ty] = P(sx + Math.sin(to) * .1, sy - Math.cos(to) * .1);
+    const vx = tx - bx, vy = ty - by, vl = Math.hypot(vx, vy) || 1, fsh = clamp(vl / (k * .1), .15, 1), ux = vx / vl, uy = vy / vl;
+    const gustNow = w.gust ? (w.gust - w.spd) * (.5 + .5 * Math.sin(now * 1.7 + a.x)) : 0, lift = clamp((w.spd + gustNow) / 15, 0, 1);   // fully out at 15 kt
+    const pole = clamp(k * .15, 14, 40), len = pole * 1.15, flut = Math.sin(now * (4 + w.spd * .3) + a.y) * .06 * lift;
+    const dx = (ux * fsh * lift - uy * flut), dy = (uy * fsh * lift + ux * flut) + (1 - lift) * .95, top = [bx, by - pole];
+    ctx.strokeStyle = '#2b2f33'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(top[0], top[1]); ctx.stroke();
+    const dl = Math.hypot(dx, dy) || 1, nx = -dy / dl, ny = dx / dl;
+    for (let i = 0; i < 5; i++) {
+      const f0 = i / 5, f1 = (i + 1) / 5, w0 = len * (.17 - .08 * f0), w1 = len * (.17 - .08 * f1), droop = f => f * f * (1 - lift) * .25 * len;
+      const p0 = [top[0] + dx * len * f0, top[1] + dy * len * f0 + droop(f0)], p1 = [top[0] + dx * len * f1, top[1] + dy * len * f1 + droop(f1)];
+      ctx.fillStyle = i % 2 ? '#fff' : '#ff6a13'; ctx.beginPath();
+      ctx.moveTo(p0[0] + nx * w0, p0[1] + ny * w0); ctx.lineTo(p1[0] + nx * w1, p1[1] + ny * w1); ctx.lineTo(p1[0] - nx * w1, p1[1] - ny * w1); ctx.lineTo(p0[0] - nx * w0, p0[1] - ny * w0); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = .8; ctx.stroke();
+    }
+  }
+}
+// Corner wind widget: an arrow showing which way the wind blows across the screen, plus the magnetic wind.
+function drawWindWidget(cx, cy) {
+  const r = 30, w = windAt(pl.x, pl.y), calm = w.spd < 3;
+  ctx.fillStyle = 'rgba(12,17,22,.82)'; ctx.beginPath(); ctx.arc(cx, cy, r + 6, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = '#3a4650'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.stroke();
+  const [px, py] = P(pl.x, pl.y), [nx, ny] = P(pl.x, pl.y - 1), na = Math.atan2(nx - px, -(ny - py));   // screen angle of north
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(na); txt('N', 0, -r + 9, 'bold 9px "Courier New", monospace', '#7d8b96', 'center'); ctx.restore();
+  if (!calm) {
+    const to = (w.dir + 180) * D2R, [tx, ty] = P(pl.x + Math.sin(to), pl.y - Math.cos(to)), a = Math.atan2(ty - py, tx - px);
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(a); ctx.strokeStyle = '#9fe0ff'; ctx.fillStyle = '#9fe0ff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-r + 8, 0); ctx.lineTo(r - 12, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(r - 6, 0); ctx.lineTo(r - 15, -6); ctx.lineTo(r - 15, 6); ctx.closePath(); ctx.fill(); ctx.restore();
+  } else txt('CALM', cx, cy + 4, 'bold 10px "Courier New", monospace', '#9fe0ff', 'center');
+  ctx.fillStyle = 'rgba(12,17,22,.82)'; const label = calm ? 'WIND CALM' : windMag(w); ctx.font = 'bold 11px "Courier New", monospace'; const lw = ctx.measureText(label).width + 12;
+  ctx.fillRect(cx - r - 8 - lw, cy - 9, lw, 18); txt(label, cx - r - 14, cy + 4, 'bold 11px "Courier New", monospace', '#9fe0ff', 'right');   // to the left, clear of the flash messages
+}
 function drawHUD() {
+  drawWindsocks();
   const narrow = W < 640, w = narrow ? W - 24 : 440, x = 12, y = 12, as = airspaceNow();
   panel(x, y, w, 76);
   txt('SECTIONAL RUN', x + 12, y + 21, '900 14px Impact, "Arial Black", sans-serif', '#ffcc33');
@@ -570,6 +629,8 @@ function drawHUD() {
   txt(`W29 ${d2(DEST).toFixed(0)} NM · ${hdg3(brg(pl.x, pl.y, DEST.x, DEST.y) + VAR)}°`, x + w - 12, y + 62, 'bold 12px "Courier New", monospace', '#9fd3ff', 'right');
   const m = game.radioLog[game.radioLog.length - 1];
   if (m && game.t - m.t < 25) { ctx.font = '12px "Courier New", monospace'; const L = wrapT(`${m.who}: ${m.text}`, w - 20); panel(x, y + 82, w, 12 + L.length * 15); L.forEach((l, i) => txt(l, x + 10, y + 99 + i * 15, '12px "Courier New", monospace', m.who === 'YOU' ? '#9fd3ff' : '#9df27f')); }
+  { const rp = m && game.t - m.t < 25, my = narrow ? y + 76 + (rp ? 12 + wrapT(`${m.who}: ${m.text}`, w - 20).length * 15 + 6 : 0) + 44 : (cam.chart ? 40 : 12) + 36;
+    drawWindWidget(W - 12 - 36, my); }
   let fy = Math.max(H * .3, 200);
   for (const f of flashes) { ctx.globalAlpha = clamp(Math.min(f.life / .5, (f.max - f.life + .2) / .2), 0, 1); ctx.font = `900 ${narrow ? 18 : 22}px Impact, "Arial Black", sans-serif`; ctx.textAlign = 'center'; ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
     for (const l of wrapT(f.text, W - 40)) { ctx.strokeText(l, W / 2, fy); ctx.fillStyle = f.color; ctx.fillText(l, W / 2, fy); fy += narrow ? 24 : 28; } ctx.globalAlpha = 1; }
@@ -597,7 +658,7 @@ addEventListener('keydown', e => {
   if (keys[e.code]) return; keys[e.code] = true; if (!running || game.over) return;
   if (game.quiz && !game.quiz.done) { const n = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code]; if (n !== undefined) answerQuiz(n); return; }
   if (!document.getElementById('sheet').hidden) { if (e.code === 'Escape' || e.code === 'Enter') closeSheet(); return; }
-  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyN: () => nav && nav.toggle(), KeyG: () => six && document.getElementById('bInst').classList.toggle('on', six.toggle()), KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); }, KeyL: land, Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
+  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyN: () => nav && nav.toggle(), KeyG: () => six && document.getElementById('bInst').classList.toggle('on', six.toggle()), KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); }, KeyL: land, KeyA: () => setAir(!airOn), Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; hold.left = hold.right = false; });
@@ -612,6 +673,7 @@ holdBtn('bLeft', 'left'); holdBtn('bRight', 'right');
 const tap = (id, f) => document.getElementById(id).addEventListener('click', f);
 tap('bUp', () => setTgt(500)); tap('bDown', () => setTgt(-500)); tap('bRadio', () => running && !game.over && openRadio()); tap('bView', () => toggleView()); tap('bChart', () => toggleChart());
 tap('bSpeed', cycleSpeed); tap('bZin', () => zoom(1.4)); tap('bZout', () => zoom(1 / 1.4)); tap('bPause', togglePause); tap('bNav', () => { if (nav) document.getElementById('bNav').classList.toggle('on', nav.toggle()); });
+tap('bAir', () => { setAir(!airOn); flash(airOn ? 'Airspace shown' : 'Airspace hidden. The rules still apply!', '#cfe8ff', 1.8); });
 tap('bInst', () => { if (six) document.getElementById('bInst').classList.toggle('on', six.toggle()); }); tap('landBtn', land);
 document.getElementById('sheetCard').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.opt !== undefined) answerQuiz(+t.dataset.opt); else if (t.dataset.call) call(t.dataset.call); else if (t.hasAttribute('data-close')) closeSheet(); });
 function showSheet(on) { document.getElementById('sheet').hidden = !on; }
@@ -625,6 +687,7 @@ cv.addEventListener('pointerup', e => { const p = ptrs.get(e.pointerId); ptrs.de
 cv.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); gest = null; });
 cv.addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY > 0 ? 1 / 1.15 : 1.15); }, { passive: false });
 function info(sx, sy) {
+  if (!FEATURES.info) return;
   if (!running) return; const [x, y] = unP(sx, sy), items = [];
   for (const a of AIRPORTS) if (Math.hypot(x - a.x, y - a.y) < Math.max(1, 20 / cam.s)) items.push(`<b>${a.n} (${a.id})</b> · ${a.tw ? 'towered (blue symbol)' : 'no tower (magenta symbol): self-announce on CTAF'} · field elevation ${a.e} ft`);
   for (const t of TOWERS) if (Math.hypot(x - t.x, y - t.y) < Math.max(.6, 16 / cam.s)) items.push(`<b>Obstacle (${t.t || 'tower'})</b> · top ${fmt(t.m)} ft MSL, ${fmt(t.a)} ft AGL${t.l ? ', lighted' : ''}`);
@@ -660,12 +723,13 @@ function navData() {
     gs: TAS, trk: norm(pl.hdg + VAR), dis: d2(wp), dtk: norm(brg(o[0], o[1], wp.x, wp.y) + VAR), wpt: wp.id, direct: N.direct, fpl, nearest: near,
     map: { range: 20, hdg: pl.hdg, items: AIRPORTS.filter(a => d2(a) < 30).map(a => ({ id: a.id, dx: a.x - pl.x, dy: a.y - pl.y, tw: !!a.tw })), leg: [[o[0] - pl.x, o[1] - pl.y], [wp.x - pl.x, wp.y - pl.y]] },
     com: { active: { name: game.lastFac, freq: FREQ[game.lastFac] }, standby: stby ? { name: stby.name, freq: FREQ[stby.name] } : { name: 'Guard', freq: FREQ.Guard } }, navaid: vor, nav: { active: vf(vors[0]), standby: vf(vors[1]) }, msgs: game.radioLog,
-    tfc: typeof setTraffic === 'function' ? { on: TRAFFIC.on, status: TRAFFIC.status } : null,
-    utils: [{ id: 'bugdtk', label: 'Heading bug to DTK', value: hdg3(norm(brg(o[0], o[1], wp.x, wp.y) + VAR)) + '°' }, ...(typeof terrainOn !== 'undefined' ? [{ id: 'terrain', label: '3D terrain', value: terrainOn ? 'ON' : 'OFF' }] : []), { id: 'quiz', label: 'Checkride questions', value: quizOn ? 'ON' : 'OFF' }, ...(typeof setTraffic === 'function' ? [{ id: 'traffic', label: 'Live traffic (ADS-B)', value: TRAFFIC.on ? TRAFFIC.status.toUpperCase() : 'OFF' }] : []), { id: 'speed', label: 'Sim speed', value: simRate + '×' }, { id: 'view', label: 'Camera / view', value: 'CYCLE' }, { id: 'fpl', label: 'Restore flight plan', value: `${START.id}→${DEST.id}` }],
+    tfc: FEATURES.traffic && typeof setTraffic === 'function' ? { on: TRAFFIC.on, status: TRAFFIC.status } : null,
+    utils: [{ id: 'bugdtk', label: 'Heading bug to DTK', value: hdg3(norm(brg(o[0], o[1], wp.x, wp.y) + VAR)) + '°' }, ...(typeof terrainOn !== 'undefined' ? [{ id: 'terrain', label: '3D terrain', value: terrainOn ? 'ON' : 'OFF' }] : []), { id: 'quiz', label: 'Checkride questions', value: quizOn ? 'ON' : 'OFF' }, ...(FEATURES.traffic && typeof setTraffic === 'function' ? [{ id: 'traffic', label: 'Live traffic (ADS-B)', value: TRAFFIC.on ? TRAFFIC.status.toUpperCase() : 'OFF' }] : []), { id: 'speed', label: 'Sim speed', value: simRate + '×' }, { id: 'view', label: 'Camera / view', value: 'CYCLE' }, { id: 'fpl', label: 'Restore flight plan', value: `${START.id}→${DEST.id}` }],
   };
 }
 function initNav() {
-  if (typeof NavPanel === 'undefined') { document.getElementById('bNav').hidden = true; return; }
+  if (!FEATURES.six) document.getElementById('bInst').hidden = true;
+  if (!FEATURES.nav || typeof NavPanel === 'undefined') { document.getElementById('bNav').hidden = true; if (FEATURES.six) initSix(); return; }
   let pos = null; try { pos = JSON.parse(localStorage.getItem('sr.navpos') || 'null'); } catch (_) {}
   nav = new NavPanel({ mount: document.body, open: W >= 900, position: pos || undefined,
     onMove: p => { try { localStorage.setItem('sr.navpos', JSON.stringify(p)); } catch (_) {} },
@@ -673,6 +737,9 @@ function initNav() {
     onAction: k => { if (k === 'bugdtk') { const w = ANY(game.nav.wpt) || DEST, o = game.nav.origin; pl.bug = brg(o[0], o[1], w.x, w.y); } else if (k === 'terrain' && typeof setTerrainOn === 'function') setTerrainOn(!terrainOn); else if (k === 'quiz') setQuiz(!quizOn); else if (k === 'traffic' && typeof setTraffic === 'function') setTraffic(!TRAFFIC.on); else if (k === 'speed') cycleSpeed(); else if (k === 'view') toggleView();
       else if (k === 'fpl') game.nav = { plan: [START.id, DEST.id], wpt: DEST.id, origin: [START.x, START.y], direct: false }; navT = 0; } });
   document.getElementById('bNav').classList.toggle('on', nav.visible);
+  if (FEATURES.six) initSix();
+}
+function initSix() {
   if (typeof SixPack !== 'undefined') {
     let sp = null; try { sp = JSON.parse(localStorage.getItem('sr.sixpos') || 'null'); } catch (_) {}
     let sm = 'six'; try { sm = localStorage.getItem('sr.sixmode') || 'six'; } catch (_) {}
@@ -726,7 +793,8 @@ function showEnd() {
   document.getElementById('againBtn').onclick = () => { document.getElementById('end').hidden = true; newGame(); running = true; };
 }
 setQuiz(quizOn); document.getElementById('optQuiz').addEventListener('change', e => setQuiz(e.target.checked));
-document.getElementById('startBtn').addEventListener('click', () => { document.getElementById('title').hidden = true; running = true; last = performance.now(); if (!nav) initNav(); });
+document.getElementById('startBtn').addEventListener('click', () => { document.getElementById('title').hidden = true; running = true; last = performance.now(); if (!nav && !six) initNav(); });
+document.getElementById('bAir').classList.toggle('on', airOn);
 // load the traced mask (and the real chart layer), then build the map
 const mimg = new Image();
 mimg.onload = () => {
