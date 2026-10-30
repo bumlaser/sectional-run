@@ -1342,7 +1342,8 @@ function addLayers() {
 
   const ext = (id, kinds, opacity) => map.addLayer({ id, type: 'fill-extrusion', source: 'vol3', filter: ['in', ['get', 'k'], ['literal', kinds]],
     paint: { 'fill-extrusion-color': ['get', 'col'], 'fill-extrusion-base': ['*', ['get', 'b'], FT * EX], 'fill-extrusion-height': ['*', ['get', 't'], FT * EX], 'fill-extrusion-opacity': opacity } });
-  ext('x-sfra', ['SFRA', 'FRZ'], .07); ext('x-moa', ['MOA'], .1); ext('x-b', ['B'], .16); ext('x-sua', ['R', 'P'], .24); ext('x-d', ['D'], .22);
+  // fill-extrusions share one depth buffer: draw small, inner volumes first so the big SFRA/MOA shells don't hide them
+  ext('x-d', ['D'], .22); ext('x-sua', ['R', 'P'], .24); ext('x-b', ['B'], .24); ext('x-moa', ['MOA'], .1); ext('x-sfra', ['SFRA', 'FRZ'], .07);
   // symbols
   const font = ['Noto Sans Bold'];
   map.addLayer({ id: 'obs-pt', type: 'circle', source: 'obs', minzoom: 8, paint: { 'circle-radius': 3, 'circle-color': '#1b2c4a', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 } });
