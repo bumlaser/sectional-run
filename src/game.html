@@ -107,7 +107,7 @@
     </ul>
     <label class="opt"><input type="checkbox" id="optQuiz" checked> Ask checkride questions along the way</label>
     <button class="go" id="startBtn" type="button" disabled>Loading chart…</button>
-    <p class="fine">Airspace, airports, obstacles and VORs come from FAA ADDS data. Water and towns are traced from the FAA Baltimore–Washington TAC. The SFRA and FRZ are approximate rings, and terrain heights are estimated. This is a practice game: not for navigation, and no substitute for current charts, NOTAMs and SFRA training.</p>
+    <p class="fine">Terrain and MEFs come from AWS Terrain Tiles (USGS 3DEP, SRTM and others, via Mapzen). Airspace, airports, obstacles and VORs come from FAA ADDS data. Water and towns are traced from the FAA Baltimore–Washington TAC. The SFRA and FRZ are approximate rings. This is a practice game: not for navigation, and no substitute for current charts, NOTAMs and SFRA training.</p>
   </div>
 </div>
 <div id="end" class="overlay" hidden><div class="card" id="endCard"></div></div>
@@ -159,7 +159,16 @@ const CHECKPOINTS = [['LIBERTY RES', 39.405, -76.905], ['LOCH RAVEN RES', 39.44,
 function elevRaw(x, y) { let s = 0, w = 0; for (const a of AIRPORTS) { const d2 = (x - a.x) ** 2 + (y - a.y) ** 2 + 4, k = 1 / (d2 * d2); s += a.e * k; w += k; } return s / w; }
 const EG = 2, ENX = Math.ceil((WORLD.x1 - WORLD.x0) / EG) + 1, ENY = Math.ceil((WORLD.y1 - WORLD.y0) / EG) + 1, EGRID = new Float32Array(ENX * ENY);
 for (let j = 0; j < ENY; j++) for (let i = 0; i < ENX; i++) EGRID[j * ENX + i] = elevRaw(WORLD.x0 + i * EG, WORLD.y0 + j * EG);
-function elev(x, y) { const fx = clamp((x - WORLD.x0) / EG, 0, ENX - 1.001), fy = clamp((y - WORLD.y0) / EG, 0, ENY - 1.001), i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j;
+// real terrain (AWS Terrain Tiles via tools/build_dem.py), 0.25 nm grid in feet; falls back to the airport blend
+const DEM = WD.dem ? (() => { const b = atob(WD.dem.ft), u = new Uint16Array(b.length / 2); for (let i = 0; i < u.length; i++) u[i] = b.charCodeAt(2 * i) | (b.charCodeAt(2 * i + 1) << 8); return { ...WD.dem, g: u }; })() : null;
+function elevDem(x, y) { const fx = clamp((x - DEM.x0) / DEM.step, 0, DEM.nx - 1.001), fy = clamp((y - DEM.y0) / DEM.step, 0, DEM.ny - 1.001), i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j, g = (a, b) => DEM.g[b * DEM.nx + a];
+  return g(i, j) * (1 - u) * (1 - v) + g(i + 1, j) * u * (1 - v) + g(i, j + 1) * (1 - u) * v + g(i + 1, j + 1) * u * v; }
+const toLLg = (x, y) => [WD.reg.clat - y / 60, WD.reg.clon + x / (60 * WD.reg.cos)];
+function mefQuad(x, y) { if (!DEM) return null; const [la, lo] = toLLg(x, y), qa = Math.floor(la / .25) * .25, qo = Math.floor(lo / .25) * .25;
+  return DEM.mef.find(m => Math.abs(m.lat - qa) < 1e-6 && Math.abs(m.lon - qo) < 1e-6) || null; }
+const mefAt = (x, y) => (mefQuad(x, y) || {}).mef;
+const mefStr = m => `${Math.floor(m / 1000)}${'⁰¹²³⁴⁵⁶⁷⁸⁹'[Math.round((m % 1000) / 100)]}`;
+function elev(x, y) { if (DEM) return elevDem(x, y); const fx = clamp((x - WORLD.x0) / EG, 0, ENX - 1.001), fy = clamp((y - WORLD.y0) / EG, 0, ENY - 1.001), i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j;
   const g = (a, b) => EGRID[b * ENX + a]; const e = g(i, j) * (1 - u) * (1 - v) + g(i + 1, j) * u * (1 - v) + g(i, j + 1) * (1 - u) * v + g(i + 1, j + 1) * u * v; return isWater(x, y) ? 0 : e; }
 
 // land / water / town mask traced from the TAC (10 px per nm)
@@ -181,7 +190,8 @@ function buildBase() {
     if (m === 1) { CELLS[j * NI + i] = { t: 'water' }; continue; }
     if (m === 2) { CELLS[j * NI + i] = { t: 'city' }; continue; }
     const f = fbm(x * .35, y * .35, 3), e = elev(x, y);
-    if (f > .63 || (e > 600 && f > .5)) { CELLS[j * NI + i] = { t: 'forest' }; continue; }
+    const slope = DEM ? Math.abs(elev(x + .2, y) - elev(x - .2, y)) + Math.abs(elev(x, y + .2) - elev(x, y - .2)) : 0;
+    if (f > .63 || (e > 600 && f > .5) || slope > 160) { CELLS[j * NI + i] = { t: 'forest' }; continue; }
     const bj = Math.floor(j / 3), bw = 2 + Math.floor(hash2(0, bj, 7) * 3), bi = Math.floor((i + bj % 3) / bw);
     CELLS[j * NI + i] = { t: 'field', blk: bi * 4096 + bj, c: CROPS[Math.floor(hash2(bi, bj, 1) * CROPS.length)], rows: hash2(bi, bj, 2) < .6, rot: hash2(bi, bj, 6) < .5 };
   }
@@ -210,7 +220,7 @@ function buildBase() {
   // sectional yellow over towns + gentle relief
   g.fillStyle = 'rgba(246,222,96,.45)'; for (let j = 0; j < NJ; j++) for (let i = 0; i < NI; i++) if (cellAt(i, j).t === 'city') g.fillRect(WORLD.x0 + i * CS, WORLD.y0 + j * CS, CS + .01, CS + .01);
   for (let j = 0; j < NJ; j++) for (let i = 0; i < NI; i++) { const c = cellAt(i, j); if (c.t === 'water') continue; const x = WORLD.x0 + (i + .5) * CS, y = WORLD.y0 + (j + .5) * CS;
-    const n = (fbm(x * .5, y * .5, 11) - .5) * (.4 + elev(x, y) / 900); if (Math.abs(n) > .05) { g.fillStyle = n > 0 ? `rgba(255,250,230,${n * .3})` : `rgba(20,30,10,${-n * .4})`; g.fillRect(WORLD.x0 + i * CS, WORLD.y0 + j * CS, CS + .01, CS + .01); } }
+    const n = DEM ? clamp((elev(x - .25, y) - elev(x + .25, y) + elev(x, y - .25) - elev(x, y + .25)) / 500, -.6, .6) : (fbm(x * .5, y * .5, 11) - .5) * (.4 + elev(x, y) / 900); if (Math.abs(n) > .04) { g.fillStyle = n > 0 ? `rgba(255,250,230,${n * .3})` : `rgba(20,30,10,${-n * .4})`; g.fillRect(WORLD.x0 + i * CS, WORLD.y0 + j * CS, CS + .01, CS + .01); } }
 }
 
 // ====================================================================
@@ -292,6 +302,9 @@ const QUIZ = [
     why: () => SUA_STATUS['R:R-4001'] ? 'Aberdeen Proving Ground fires live ordnance. When it\'s active, stay out.' : 'Restricted areas are only off-limits while active, but always confirm the status with flight service or ATC.' },
   { id: 'vor', when: () => d2(VORS.find(v => v.id === 'BAL') || START) < 6 && game.t > 30, kicker: 'Baltimore VORTAC', q: 'The compass rose around the Baltimore VORTAC is aligned with…',
     a: ['Magnetic north', 'True north', 'Runway 15 at BWI'], why: `VOR roses are oriented to magnetic north, so they're rotated about ${VAR}° from true north around here.` },
+  { id: 'mef', when: () => DEM && game.t > 240 && !!mefAt(pl.x, pl.y), kicker: 'Grid square', q: () => `What does the big blue ${mefStr(mefAt(pl.x, pl.y))} in this grid square tell you?`,
+    a: () => [`Maximum elevation figure: ${fmt(mefAt(pl.x, pl.y))} ft MSL clears the highest terrain and obstacles in this square`, 'The minimum IFR enroute altitude', 'The average terrain height in the square'],
+    why: () => { const m = mefQuad(pl.x, pl.y); return `The MEF is printed in thousands and hundreds of feet MSL. It's built from the highest terrain or obstacle in the quadrangle plus a margin. Here the highest ${m.o + 100 > m.t + 300 ? `obstacle tops out at ${fmt(m.o)}` : `terrain reaches ${fmt(m.t)}`} ft, so the MEF is ${fmt(m.mef)}. It's a quick check for when you're low or the visibility goes down.`; } },
   { id: 'dest', when: () => d2(DEST) < 14, kicker: 'Bay Bridge (W29)', q: 'Bay Bridge\'s airport symbol is magenta. What does that mean for your arrival?',
     a: ['No tower. Self-announce your position and intentions on the CTAF', 'Call the tower for a landing clearance', 'It\'s a private field, so you can\'t land'],
     why: 'Magenta symbols mark airports without a control tower. Announce on the CTAF ("Bay Bridge traffic…"), enter the pattern, and keep your eyes open.' },
@@ -435,6 +448,13 @@ function drawChart2D() {
   const s = cam.s;
   // Class E 700 ft vignettes (soft magenta inside the boundary)
   for (const v of VOL) if (v.k === 'E5' && visibleVol(v)) { ctx.save(); ringsPath(v.r); ctx.clip('evenodd'); ctx.strokeStyle = 'rgba(168,50,127,.32)'; ctx.lineWidth = Math.max(10, s * 1.2); ringsPath(v.r); ctx.stroke(); ctx.restore(); }
+  // MEF quadrangles
+  if (DEM) { ctx.strokeStyle = 'rgba(40,60,90,.2)'; ctx.lineWidth = 1;
+    for (const m of DEM.mef) { const [a, b] = P(...toNM(m.lat + .25, m.lon)), [c, d] = P(...toNM(m.lat, m.lon + .25)); if (c < 0 || a > W || d < 0 || b > H) continue;
+      ctx.strokeRect(a, b, c - a, d - b);
+      if (cam.s > 4.5) { const cx = (a + c) / 2, cy = (b + d) / 2, sz = clamp(cam.s * 2.2, 22, 52); ctx.fillStyle = 'rgba(29,95,174,.5)'; ctx.textBaseline = 'middle';
+        ctx.font = `900 ${sz}px "Arial Black", Impact, sans-serif`; ctx.textAlign = 'right'; ctx.fillText(String(Math.floor(m.mef / 1000)), cx, cy);
+        ctx.font = `900 ${sz * .55}px "Arial Black", Impact, sans-serif`; ctx.textAlign = 'left'; ctx.fillText(String(Math.round((m.mef % 1000) / 100)), cx + 1, cy - sz * .25); } } }
   // planned direct course
   ctx.strokeStyle = 'rgba(168,50,127,.55)'; ctx.lineWidth = 3; ctx.setLineDash([2, 7]); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(...P(START.x, START.y)); ctx.lineTo(...P(DEST.x, DEST.y)); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = 'butt';
   for (const v of VOL) {
@@ -526,7 +546,7 @@ function airspaceNow() {
   const e2 = VOL.find(v => v.k === 'E2' && insideVol(v, pl.x, pl.y, pl.alt)), under = VOL.filter(v => v.k === 'B' && horiz(v, pl.x, pl.y) && pl.alt < v.fl).sort((a, b) => a.fl - b.fl)[0];
   const veil = VOL.some(v => v.k === 'MODEC' && insideVol(v, pl.x, pl.y, pl.alt));
   const main = names.length ? names.join(' + ') : e2 ? 'Class E (surface)' : 'Class E';
-  const note = under ? `under Bravo shelf ${label100(under.ce)}/${label100(under.fl)} (floor ${fmt(under.fl)})` : veil ? 'inside the 30 NM Mode C veil' : `ground ~${fmt(elev(pl.x, pl.y))} ft (estimated)`;
+  const note = under ? `under Bravo shelf ${label100(under.ce)}/${label100(under.fl)} (floor ${fmt(under.fl)})` : `${veil ? 'Mode C veil · ' : ''}ground ${fmt(elev(pl.x, pl.y))} ft${DEM ? ` · MEF ${fmt(mefAt(pl.x, pl.y))}` : ' (estimated)'}`;
   const bad = ins.some(v => (v.k === 'B' && !game.clrB) || v.k === 'P' || v.k === 'SFRA' || v.k === 'FRZ' || (v.k === 'R' && SUA_STATUS[v.grp]) || (v.k === 'D' && !game.contact[v.grp]));
   return { main, note, bad };
 }
@@ -606,7 +626,8 @@ function info(sx, sy) {
     if (v.k === 'E5' && items.some(i => i.includes('700 ft'))) continue;
     items.push(`<b>${v.k === 'E5' ? 'Class E' : v.n}</b> · ${v.k === 'E5' || v.k === 'MODEC' ? '' : fl + ' to ' + ce + ' ft MSL · '}${why}`); }
   if (!items.length) items.push('<b>Class E</b> from 1,200 ft AGL (Class G below)');
-  items.push(`<span style="color:#6b5a2a">${isWater(x, y) ? 'Water' : isTown(x, y) ? 'Congested area (yellow)' : 'Open country'} · ground about ${fmt(elev(x, y))} ft (estimated)</span>`);
+  const mq = mefQuad(x, y);
+  items.push(`<span style="color:#6b5a2a">${isWater(x, y) ? 'Water' : isTown(x, y) ? 'Congested area (yellow)' : 'Open country'} · ground ${fmt(elev(x, y))} ft${DEM ? '' : ' (estimated)'}${mq ? ` · MEF for this square <b>${fmt(mq.mef)}</b> (highest ${mq.o + 100 > mq.t + 300 ? `obstacle ${fmt(mq.o)}` : `terrain ${fmt(mq.t)}`} ft)` : ''}</span>`);
   const el = document.getElementById('toast'); el.innerHTML = `<span class="x">✕</span>` + items.map(i => `<div>${i}</div>`).join(''); el.hidden = false; clearTimeout(info.t); info.t = setTimeout(() => el.hidden = true, 8000);
 }
 document.getElementById('toast').addEventListener('click', () => { document.getElementById('toast').hidden = true; });

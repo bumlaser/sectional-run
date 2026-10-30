@@ -7,8 +7,7 @@ VOR roses and VFR cruising altitudes.
 
 **`index.html`: real airspace, Frederick (FDK) to Bay Bridge (W29).** Airspace, airports, obstacles and VORs come
 from FAA ADDS data. Water and towns are traced from the FAA Baltimore–Washington TAC, and the real TAC can be
-swapped in as the map layer. The SFRA and FRZ are approximate rings, and ground heights are estimated from airport
-elevations. **Not for navigation.**
+swapped in as the map layer. The SFRA and FRZ are approximate rings. Terrain comes from AWS Terrain Tiles. **Not for navigation.**
 
 **`3d/`: the MapLibre version.** It uses OpenFreeMap vector tiles (Positron, retinted toward sectional colors),
 draws the FAA airspace as real 3D slabs at 2× vertical scale, and has a camera that rotates and pitches:
@@ -33,6 +32,14 @@ nav.update({ gs, trk, dis, dtk, wpt, direct, fpl, nearest, map, com, navaid, uti
 The left strip shows GS, TRK, DIS and DTK. The right screen opens on a 2×3 home grid (Map, FPL, Proc, Nav/Com,
 Nearest, Utilities). The bezel's HOME and D→ buttons return to the grid and open Direct-To. In the game,
 `navData()` in `src/game.html` is the adapter that builds the update from the game state.
+
+## Terrain and MEFs
+
+`tools/build_dem.py` downloads AWS Terrain Tiles (Terrarium encoding; USGS 3DEP, SRTM and others, via Mapzen) and
+writes `data/derived/dem.json`: a 0.25 nm elevation grid used for the AGL checks, the canvas hillshade and the
+maximum elevation figure (MEF) for each 15′ quadrangle. MEF = highest terrain + 300 ft or highest obstacle + 100 ft,
+rounded up to the next 100 ft. That matches the MEFs printed on the Baltimore–Washington TAC in every quadrangle
+checked (21, 24, 13, 13, 17, 06). The 3D version also streams the same tiles for live 3D terrain and hillshading.
 
 ## Building
 

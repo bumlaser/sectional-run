@@ -3,7 +3,10 @@
   3d/index.html  MapLibre version with OpenFreeMap tiles, 3D airspace and a rotating camera (needs network)"""
 import base64, os
 ML = '4.7.1'
-src = open('src/game.html').read(); w = open('data/derived/world.json').read()
+import json
+src = open('src/game.html').read(); _w = json.load(open('data/derived/world.json'))
+if os.path.exists('data/derived/dem.json'): _w['dem'] = json.load(open('data/derived/dem.json'))
+w = json.dumps(_w, separators=(',', ':'))
 tac = 'data:image/jpeg;base64,' + base64.b64encode(open('data/derived/tac_warp.jpg', 'rb').read()).decode()
 fill = lambda s: s.replace('__WORLD__', w, 1).replace("'__TAC__'", "'" + tac + "'", 1)
 NAVJS = '<script>\n' + open('src/nav_panel.js').read() + '</script>\n'

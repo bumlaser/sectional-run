@@ -11,7 +11,10 @@ let map = null, mapReady = false, viewMode = 1;
 const KCOL = { B: '#1d5fae', D: '#1d5fae', R: '#1d5fae', P: '#1d5fae', SFRA: '#1d5fae', FRZ: '#c9a21a', MOA: '#a8327f', W: '#a8327f', A: '#a8327f', E2: '#a8327f', E5: '#a8327f', MODEC: '#a8327f' };
 const fc = feats => ({ type: 'FeatureCollection', features: feats });
 const ringLL = r => { const c = r.map(([x, y]) => toLL(x, y)); c.push(c[0]); return c; };
-const volFeat = v => ({ type: 'Feature', properties: { k: v.k, n: v.n, fl: v.fl, ce: Math.min(v.ce, CAP), col: KCOL[v.k] || '#1d5fae' }, geometry: { type: 'Polygon', coordinates: v.r.map(ringLL) } });
+// with terrain on, extrusions are measured from the ground, so subtract the mean ground under each volume to stay MSL-true
+const meanGround = v => { let s = 0, n = 0; for (const r of v.r) for (const [x, y] of r) { s += elev(x, y); n++; } s += elev(v.lp[0], v.lp[1]) * 4; return s / (n + 4); };
+const volFeat = v => { const g = DEM ? meanGround(v) : 0, b = v.fl === 0 ? 0 : Math.max(0, v.fl - g), t = Math.max(b + 100, Math.min(v.ce, CAP) - g);
+  return { type: 'Feature', properties: { k: v.k, n: v.n, fl: v.fl, ce: Math.min(v.ce, CAP), b, t, col: KCOL[v.k] || '#1d5fae' }, geometry: { type: 'Polygon', coordinates: v.r.map(ringLL) } }; };
 const pt = (x, y, props) => ({ type: 'Feature', properties: props, geometry: { type: 'Point', coordinates: toLL(x, y) } });
 const line = (pts, props = {}) => ({ type: 'Feature', properties: props, geometry: { type: 'LineString', coordinates: pts.map(([x, y]) => toLL(x, y)) } });
 const metersLL = (lon, lat, dx, dy) => [lon + dx / (111320 * Math.cos(lat * D2R)), lat - dy / 110540];
@@ -54,6 +57,18 @@ function sectionalTint(style) {
 function addLayers() {
   const [w0, n0] = toLL(WORLD.x0, WORLD.y0), [e0, s0] = toLL(WORLD.x1, WORLD.y1);
   const firstSymbol = map.getStyle().layers.find(l => l.type === 'symbol')?.id;
+  const demSrc = extra => ({ type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 14, ...extra });
+  map.addSource('dem', demSrc({ attribution: 'Terrain: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank">AWS Terrain Tiles</a> (USGS 3DEP, SRTM, Mapzen)' }));
+  map.addSource('dem-hs', demSrc({}));   // separate source for the hillshade, as MapLibre recommends
+  const firstLine = map.getStyle().layers.find(l => l.type === 'line')?.id;
+  map.addLayer({ id: 'hillshade', type: 'hillshade', source: 'dem-hs', paint: { 'hillshade-exaggeration': .45, 'hillshade-shadow-color': '#5b6b45', 'hillshade-highlight-color': '#fffbe8', 'hillshade-accent-color': '#6d7f52' } }, firstLine);
+  if (DEM) { const q = [], ql = [];
+    for (const m of DEM.mef) { const [a, b] = [toNM(m.lat + .25, m.lon), toNM(m.lat, m.lon + .25)];
+      q.push(line([[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]], [a[0], a[1]]])); ql.push(pt((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, { t: String(m.mef / 100 | 0).replace(/^(\d)$/, '0$1') })); }
+    map.addSource('mefq', { type: 'geojson', data: fc(q) }); map.addSource('mefl', { type: 'geojson', data: fc(ql) });
+    map.addLayer({ id: 'mefq', type: 'line', source: 'mefq', paint: { 'line-color': '#1d5fae', 'line-opacity': .2, 'line-width': 1 } }, firstSymbol);
+    map.addLayer({ id: 'mefl', type: 'symbol', source: 'mefl', layout: { 'text-field': ['concat', ['slice', ['get', 't'], 0, ['-', ['length', ['get', 't']], 1]], ' ', ['slice', ['get', 't'], ['-', ['length', ['get', 't']], 1]]], 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 7, 18, 11, 40], 'text-allow-overlap': true, 'text-pitch-alignment': 'map' },
+      paint: { 'text-color': 'rgba(29,95,174,.42)' } }, firstSymbol); }
   map.addSource('tac', { type: 'image', url: TAC_SRC, coordinates: [[w0, n0], [e0, n0], [e0, s0], [w0, s0]] });
   map.addLayer({ id: 'tac', type: 'raster', source: 'tac', layout: { visibility: 'none' }, paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 } }, firstSymbol);
 
@@ -103,7 +118,7 @@ function addLayers() {
   map.addLayer({ id: 'plane', type: 'fill-extrusion', source: 'plane', paint: { 'fill-extrusion-color': ['get', 'col'], 'fill-extrusion-base': ['get', 'b'], 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 1 } });
 
   const ext = (id, kinds, opacity) => map.addLayer({ id, type: 'fill-extrusion', source: 'vol3', filter: ['in', ['get', 'k'], ['literal', kinds]],
-    paint: { 'fill-extrusion-color': ['get', 'col'], 'fill-extrusion-base': ['*', ['get', 'fl'], FT * EX], 'fill-extrusion-height': ['*', ['get', 'ce'], FT * EX], 'fill-extrusion-opacity': opacity } });
+    paint: { 'fill-extrusion-color': ['get', 'col'], 'fill-extrusion-base': ['*', ['get', 'b'], FT * EX], 'fill-extrusion-height': ['*', ['get', 't'], FT * EX], 'fill-extrusion-opacity': opacity } });
   ext('x-sfra', ['SFRA', 'FRZ'], .07); ext('x-moa', ['MOA'], .1); ext('x-b', ['B'], .16); ext('x-sua', ['R', 'P'], .24); ext('x-d', ['D'], .22);
   // symbols
   const font = ['Noto Sans Bold'];
@@ -129,7 +144,7 @@ function planeGeom(lon, lat, span) {
   return PLANE_SHAPE.map(r => { const ring = r.map(([x, y]) => metersLL(lon, lat, (x * c - y * s) * span, (x * s + y * c) * span)); ring.push(ring[0]); return ring; });
 }
 function updatePlane() {
-  const [lon, lat] = toLL(pl.x, pl.y), z = map.getZoom(), span = clamp(36 * Math.pow(2, 16.1 - z), 50, 9000), h = pl.alt * FT * EX;
+  const [lon, lat] = toLL(pl.x, pl.y), z = map.getZoom(), span = clamp(36 * Math.pow(2, 16.1 - z) * (viewMode === 0 ? .5 : 1), 50, 9000), gnd = map.getTerrain() ? elev(pl.x, pl.y) : 0, h = Math.max(30, (pl.alt - gnd) * FT * EX);
   map.getSource('plane').setData(fc([{ type: 'Feature', properties: { col: '#ff6a13', b: h, h: h + span * .12 }, geometry: { type: 'Polygon', coordinates: planeGeom(lon, lat, span) } }]));
   const sq = span * .03, fx = [{ type: 'Feature', properties: { p: 'shadow' }, geometry: { type: 'Polygon', coordinates: planeGeom(lon, lat, span) } }];
   const ring = (rad) => Array.from({ length: 33 }, (_, i) => metersLL(lon, lat, Math.cos(i / 32 * 6.283) * rad, Math.sin(i / 32 * 6.283) * rad));
@@ -143,6 +158,7 @@ function updatePlane() {
 }
 function applyMode() {
   const m = MODES[viewMode], three = viewMode !== 0;
+  if (map.getSource('dem')) map.setTerrain(three ? { source: 'dem', exaggeration: EX } : null);
   for (const id of ['x-sfra', 'x-moa', 'x-b', 'x-sua', 'x-d', 'obs3']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', three ? 'visible' : 'none');
   if (viewMode === 2) { map.dragRotate.enable(); map.touchZoomRotate.enableRotation(); map.touchPitch.enable(); }
   else { map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.touchPitch.disable(); }
