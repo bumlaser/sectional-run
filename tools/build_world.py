@@ -72,6 +72,16 @@ cx, cy = nm_xy(dlat, dlon)
 circ = lambda R: [[round(cx + R * math.cos(i / 90 * math.pi), 2), round(cy + R * math.sin(i / 90 * math.pi), 2)] for i in range(180)]
 vols.append({'k': 'SFRA', 'n': 'Washington DC SFRA', 'fl': 0, 'ce': 18000, 'r': [circ(30)], 'lp': [round(cx, 2), round(cy - 22, 2)], 'approx': 1})
 vols.append({'k': 'FRZ', 'n': 'Washington DC FRZ', 'fl': 0, 'ce': 18000, 'r': [circ(15)], 'lp': [round(cx, 2), round(cy - 11, 2)], 'approx': 1})
+# R-4009 when active: the 10 NM ring the TAC draws around P-40 (measured on the georeferenced TAC: 9.7-10.0 NM),
+# surface to 12,500 ft. The game makes it hot only while a VIP is at Camp David; P-40 inside stays always active.
+def expand_r4009(vols):
+    p40 = next(v for v in vols if v['n'] == 'P-40'); r = p40['r'][0]
+    pcx, pcy = sum(p[0] for p in r) / len(r), sum(p[1] for p in r) / len(r)
+    for v in vols:
+        if v['n'] == 'R-4009':
+            v.update(fl=0, ce=12500, r=[[[round(pcx + 10 * math.cos(i / 45 * math.pi), 2), round(pcy + 10 * math.sin(i / 45 * math.pi), 2)] for i in range(90)]],
+                     lp=[round(pcx, 2), round(pcy + 7, 2)], tou='WHEN A VIP IS AT CAMP DAVID (BY NOTAM)')
+expand_r4009(vols)
 # airports
 dlinks = {v['id'] for v in vols if v['k'] == 'D'}
 aps = []
