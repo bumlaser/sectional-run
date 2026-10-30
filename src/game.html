@@ -88,20 +88,20 @@
   <button id="landBtn" type="button" hidden>LAND AT BAY BRIDGE</button>
   <div class="row1">
     <div class="grp" aria-label="Heading">
-      <button type="button" id="bLeft" aria-label="Heading bug left">◀</button>
+      <button type="button" id="bLeft" aria-label="Heading bug left"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M14 3L5 10l9 7z" fill="currentColor"/></svg></button>
       <div class="readout"><small>HDG</small><b id="rHdg">095°</b><span class="tgt" id="rCrs">BUG 123°</span></div>
-      <button type="button" id="bRight" aria-label="Heading bug right">▶</button>
+      <button type="button" id="bRight" aria-label="Heading bug right"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M6 3l9 7-9 7z" fill="currentColor"/></svg></button>
     </div>
     <div class="grp" aria-label="Altitude">
-      <button type="button" id="bDown" aria-label="Descend 500 feet">▼</button>
+      <button type="button" id="bDown" aria-label="Descend 500 feet"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3 6h14l-7 9z" fill="currentColor"/></svg></button>
       <div class="readout"><small>ALT MSL</small><b id="rAlt">1,800</b><span class="tgt" id="rTgt">→ 2,500</span></div>
-      <button type="button" id="bUp" aria-label="Climb 500 feet">▲</button>
+      <button type="button" id="bUp" aria-label="Climb 500 feet"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3 14h14l-7-9z" fill="currentColor"/></svg></button>
     </div>
   </div>
   <div class="row2">
     <button type="button" id="bRadio">RADIO</button>
     <button type="button" id="bView">3D</button>
-    <button type="button" id="bChart">CHART</button>
+    <button type="button" id="bChart">MAP</button>
     <button type="button" id="bSpeed">8×</button>
     <button type="button" id="bZout" aria-label="Zoom out">−</button>
     <button type="button" id="bZin" aria-label="Zoom in">+</button>
@@ -274,7 +274,7 @@ const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 let W = 0, H = 0, DPR = 1;
 function resize() { DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * DPR; cv.height = H * DPR; cv.style.width = W + 'px'; cv.style.height = H + 'px'; }
 addEventListener('resize', resize); resize();
-const cam = { cx: 0, cy: 0, s: 20, T: 1, hz: 0, yc: .5, px: 0, py: 0, lastPan: -99, view: '2d', chart: false };
+const cam = { cx: 0, cy: 0, s: 20, T: 1, hz: 0, yc: .5, px: 0, py: 0, lastPan: -99, view: '2d', chart: true };   // the real chart is on by default
 let pl, game, simRate = 8, paused = false, running = false;
 let quizOn = false; try { quizOn = localStorage.getItem('sr.quiz2') === '1'; } catch (_) {}
 function setQuiz(on) { quizOn = on; try { localStorage.setItem('sr.quiz2', on ? '1' : '0'); } catch (_) {} const cb = document.getElementById('optQuiz'); if (cb) cb.checked = on; }
@@ -640,6 +640,7 @@ function drawWindsocks() {
 }
 // Corner wind widget: an arrow showing which way the wind blows across the screen, plus the magnetic wind.
 function drawWindWidget(cx, cy) {
+  ctx.save(); ctx.globalAlpha = .82;   // let a little of the map show through
   const r = 30, w = windAt(pl.x, pl.y), calm = w.spd < 3;
   ctx.fillStyle = 'rgba(23,23,23,.92)'; ctx.beginPath(); ctx.arc(cx, cy, r + 6, 0, 6.283); ctx.fill();
   ctx.strokeStyle = '#3a4650'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.stroke();
@@ -653,6 +654,7 @@ function drawWindWidget(cx, cy) {
   } else txt('CALM', cx, cy + 4, `bold 10px ${UIF}`, '#9CC9FF', 'center');
   const label = calm ? 'Wind calm' : windMag(w); ctx.font = `bold 12px ${UIF}`; const lw = ctx.measureText(label).width + 14;
   panel(cx - r - 8 - lw, cy - 10, lw, 20); txt(label, cx - r - 15, cy + 4, `bold 12px ${UIF}`, '#ffffff', 'right');   // to the left, clear of the flash messages
+  ctx.restore();
 }
 function drawHUD() {
   drawWindsocks();
@@ -681,7 +683,7 @@ function drawHUD() {
     L.forEach((l, i) => txt(l, W / 2 + 2, fy + 21 + i * 19, ctx.font, '#ffffff', 'center')); fy += ch + 6; ctx.globalAlpha = 1; }
   const [dx, dy] = P(DEST.x, DEST.y);
   if (dx < 0 || dx > W || dy < 0 || dy > H) { const [ax, ay] = P(pl.x, pl.y, pl.alt), a = Math.atan2(dy - ay, dx - ax); ctx.save(); ctx.translate(ax + Math.cos(a) * 46, ay + Math.sin(a) * 46); ctx.rotate(a); ctx.fillStyle = '#ffd21f'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-6, -10); ctx.lineTo(-2, 0); ctx.lineTo(-6, 10); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore(); }
-  if (cam.chart) { ctx.font = 'bold 11px "Courier New", monospace'; const s = 'FAA BALTIMORE–WASHINGTON TAC'; ctx.font = `bold 11px ${UIF}`; const tw = ctx.measureText(s).width + 16; panel(W - tw - 12, 12, tw, 22); txt(s, W - 20, 27, `bold 11px ${UIF}`, '#9BF0E1', 'right'); }
+  if (cam.chart && !narrow) { const s = typeof map !== 'undefined' ? 'FAA SECTIONAL · TAC' : 'FAA BALTIMORE–WASHINGTON TAC'; ctx.font = `bold 11px ${UIF}`; const tw = ctx.measureText(s).width + 16; panel(W - tw - 12, 12, tw, 22); txt(s, W - 20, 27, `bold 11px ${UIF}`, '#9BF0E1', 'right'); }
 }
 function render() {
   drawBase();
@@ -710,6 +712,7 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; hold.lef
 function setTgt(d) { pl.tgt = clamp(pl.tgt + d, 1000, 12500); }
 function zoom(f) { cam.s = clamp(cam.s * f, 5, 160); }
 // ---------------- settings (cog button) ----------------
+const CREDITS = () => (typeof map !== 'undefined' ? 'Base map © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors, © OpenMapTiles, served by OpenFreeMap (Positron style). Charts: FAA Aeronautical Information Services. ' : 'Chart: FAA Baltimore–Washington TAC. ') + 'Terrain: AWS Terrain Tiles (USGS 3DEP, SRTM, Mapzen). Airspace, airports, obstacles and navaids: FAA ADDS. Interface: Backstage design system (Apache-2.0).';
 function viewName() { return cam.view === '2d' ? '2D' : '3D'; }
 function openSettings() {
   const sw = (id, on) => `<button type="button" class="sw ${on ? 'on' : ''}" data-set="${id}" role="switch" aria-checked="${on}" aria-label="${id}"></button>`;
@@ -722,6 +725,7 @@ function openSettings() {
     ${nav ? row('Navigator', 'The panel-mount GPS unit (also the NAV button)', sw('nav', nav.visible)) : ''}
     ${row('Sim speed', 'How fast time passes', `<div class="seg">${speeds}</div>`)}
     ${row('Camera', `Current view: ${viewName()}`, '<button type="button" class="set-btn" data-set="view">Change</button>')}
+    <p class="fine" style="margin-top:14px"><b>Credits.</b> ${CREDITS()}</p>
     <div class="actions" style="margin-top:16px"><button type="button" class="go" data-set="close">Done</button></div>`;
   document.getElementById('settings').hidden = false;
 }

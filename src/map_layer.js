@@ -76,7 +76,7 @@ function addLayers() {
   const faa = n => `https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/${n}/MapServer/tile/{z}/{y}/{x}`, CH = 'Charts: FAA Aeronautical Information Services';
   map.addSource('sec', { type: 'raster', tiles: [faa('VFR_Sectional')], tileSize: 256, minzoom: 8, maxzoom: 12, attribution: CH });
   map.addSource('tac', { type: 'raster', tiles: [faa('VFR_Terminal')], tileSize: 256, minzoom: 10, maxzoom: 12 });
-  for (const id of ['sec', 'tac']) map.addLayer({ id, type: 'raster', source: id, layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, firstSymbol);
+  for (const id of ['sec', 'tac']) map.addLayer({ id, type: 'raster', source: id, layout: { visibility: cam.chart ? 'visible' : 'none' }, paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, firstSymbol);
 
   const ruled = VOL.filter(v => RULED.includes(v.k));
   map.addSource('vol', { type: 'geojson', data: fc(VOL.map(volFeat)) });
@@ -233,7 +233,9 @@ render = function () {
     map = new maplibregl.Map({ container: 'map', style: sectionalTint(style), center: c, zoom: 10.3, pitch: 62, bearing: 112, maxPitch: 78, dragPan: false, keyboard: false,
       pixelRatio: Math.min(devicePixelRatio || 1, 1.5),   // full Retina resolution costs a lot of GPU for little gain here
       attributionControl: { compact: true }, fadeDuration: 0 });
-    map.on('load', () => { addLayers(); if (FEATURES.traffic && typeof initTraffic === 'function') initTraffic(map); wireGestures(); mapReady = true; mapReadyHook(); });
+    map.on('load', () => { addLayers(); if (FEATURES.traffic && typeof initTraffic === 'function') initTraffic(map); wireGestures(); mapReady = true; mapReadyHook();
+      const at = document.querySelector('.maplibregl-ctrl-attrib');   // start the credits collapsed to the (i) button; tap it to read them (also in Settings)
+      if (at) { at.classList.remove('maplibregl-compact-show'); at.removeAttribute('open'); } });
     map.on('click', e => info(e.point.x, e.point.y));
   }).catch(err => { document.getElementById('startBtn').textContent = 'Map tiles unavailable'; console.error(err); });
 })();

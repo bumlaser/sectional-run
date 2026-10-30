@@ -172,7 +172,7 @@ tiles.arcgis.com). They cover the whole US and update every 56-day cycle. A self
   - R-4001 status, the BAL VOR rose, and the CTAF arrival at Bay Bridge
 - **Radio:** Potomac Approach (a Bravo clearance isn't guaranteed), Class D towers, flight service for SUA status,
   and the Bay Bridge CTAF.
-- **CHART button:** swaps the stylized map for the real FAA chart, reprojected to line up.
+- **CHART button:** the real FAA chart is on by default; the button (MAP) swaps to the stylized map and back.
 
 ## The fictional prototype (fictional.html)
 
