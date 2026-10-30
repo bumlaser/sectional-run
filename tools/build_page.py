@@ -4,7 +4,7 @@
 import base64, os
 ML = '4.7.1'
 import json
-src = open('src/game.html').read(); _w = json.load(open('data/derived/world.json'))
+src = open('src/game.html').read().replace('/*__AIRPORT_OPS__*/', open('src/airport_ops.js').read(), 1); _w = json.load(open('data/derived/world.json'))
 if os.path.exists('data/derived/dem.json'): _w['dem'] = json.load(open('data/derived/dem.json'))
 w = json.dumps(_w, separators=(',', ':'))
 tac = 'data:image/jpeg;base64,' + base64.b64encode(open('data/derived/tac_warp.jpg', 'rb').read()).decode()

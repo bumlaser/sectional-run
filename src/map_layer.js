@@ -117,6 +117,22 @@ function addLayers() {
   map.addLayer({ id: 'route', type: 'line', source: 'route', paint: { 'line-color': '#a8327f', 'line-width': 3, 'line-opacity': .6, 'line-dasharray': [.5, 2] }, layout: { 'line-cap': 'round' } });
   map.addLayer({ id: 'nav-line', type: 'line', source: 'nav', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#1d5fae', 'line-width': 1.2 } });
 
+  // KFDK field detail from airport_ops.js: aprons, taxiways, hold lines, buildings and the active route
+  if (typeof FGEO !== 'undefined') {
+    const ll = r => r.map(p => toLL(p[0], p[1])), F_ = (k, g, p = {}) => ({ type: 'Feature', properties: { k, ...p }, geometry: g });
+    map.addSource('fld', { type: 'geojson', data: fc([...FGEO.aprons.map(a => F_('apron', { type: 'Polygon', coordinates: [ll(a.ring)] })),
+      ...FGEO.twys.map(w => F_('twy', { type: 'LineString', coordinates: ll(w.line) })), ...FGEO.holds.map(h => F_('hold', { type: 'LineString', coordinates: ll(h) }))]) });
+    map.addSource('fld-bld', { type: 'geojson', data: fc(FGEO.blds.map(b => F_('bld', { type: 'Polygon', coordinates: [ll(b.ring)] }, { h: b.h * FT * EX, c: b.c }))) });
+    map.addSource('fld-route', { type: 'geojson', data: fc([]) });
+    const ftW = ft => ['interpolate', ['exponential', 2], ['zoom'], 12, ft * FT / 29.5, 18, ft * FT / .461];   // true width in feet at this latitude
+    const fade = (a, b) => ['interpolate', ['linear'], ['zoom'], 12.5, 0, 13.5, a, 20, b];
+    map.addLayer({ id: 'fld-apron', type: 'fill', source: 'fld', minzoom: 12.5, filter: ['==', ['get', 'k'], 'apron'], paint: { 'fill-color': '#8b8d91', 'fill-opacity': fade(.9, .9) } });
+    map.addLayer({ id: 'fld-twy', type: 'line', source: 'fld', minzoom: 12.5, filter: ['==', ['get', 'k'], 'twy'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#8b8d91', 'line-width': ftW(75), 'line-opacity': fade(.95, .95) } });
+    map.addLayer({ id: 'fld-twy-c', type: 'line', source: 'fld', minzoom: 14.5, filter: ['==', ['get', 'k'], 'twy'], paint: { 'line-color': '#f2c230', 'line-width': 1.2 } });
+    map.addLayer({ id: 'fld-hold', type: 'line', source: 'fld', minzoom: 14.5, filter: ['==', ['get', 'k'], 'hold'], paint: { 'line-color': '#f2c230', 'line-width': ftW(6) } });
+    map.addLayer({ id: 'fld-route', type: 'line', source: 'fld-route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#d634aa', 'line-width': 3.5, 'line-opacity': .85, 'line-dasharray': [2, 1.5] } });
+    map.addLayer({ id: 'fld-bld', type: 'fill-extrusion', source: 'fld-bld', minzoom: 13, paint: { 'fill-extrusion-color': ['get', 'c'], 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': .95 } });
+  }
   // 3D airspace, obstacles and plane
   map.addLayer({ id: 'obs3', type: 'fill-extrusion', source: 'obs3', minzoom: 8.5, paint: { 'fill-extrusion-color': '#1b2c4a', 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': .9 } });
   map.addLayer({ id: 'plane-shadow', type: 'fill', source: 'planeFx', filter: ['in', ['get', 'p'], ['literal', ['shadow', 'ring']]], paint: { 'fill-color': ['case', ['==', ['get', 'p'], 'ring'], '#ff6a13', '#000'], 'fill-opacity': ['case', ['==', ['get', 'p'], 'ring'], .85, .28] } });
@@ -132,7 +148,7 @@ function addLayers() {
   map.addLayer({ id: 'obs-pt', type: 'circle', source: 'obs', minzoom: 8, paint: { 'circle-radius': 3, 'circle-color': '#1b2c4a', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 } });
   map.addLayer({ id: 'obs-lab', type: 'symbol', source: 'obs', minzoom: 9.5, layout: { 'text-field': ['get', 't'], 'text-font': font, 'text-size': 11, 'text-anchor': 'left', 'text-offset': [.6, 0], 'text-allow-overlap': false },
     paint: { 'text-color': '#1b2c4a', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
-  map.addLayer({ id: 'rwy', type: 'fill', source: 'rwy', minzoom: 11, paint: { 'fill-color': '#4b4c50', 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 11.6, 1] } });
+  map.addLayer({ id: 'rwy', type: 'fill', source: 'rwy', minzoom: 11, paint: { 'fill-color': '#4b4c50', 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 11.6, 1] } }, 'obs3');   // under the plane
   const apR = ['interpolate', ['exponential', 2], ['zoom'], 7, 1.8, 10, 10, 12, 40];   // matches a 0.6 nm ground radius
   map.addLayer({ id: 'ap-pt', type: 'circle', source: 'aps', maxzoom: 11.6, paint: { 'circle-radius': apR, 'circle-color': 'rgba(255,255,255,.85)', 'circle-stroke-color': ['case', ['==', ['get', 'dest'], 1], '#ffcc33', ['get', 'col']], 'circle-stroke-width': ['case', ['==', ['get', 'dest'], 1], 4, 2.5], 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map' } });
   map.addLayer({ id: 'rwysym', type: 'line', source: 'rwysym', maxzoom: 11.6, paint: { 'line-color': ['get', 'col'], 'line-width': ['interpolate', ['exponential', 2], ['zoom'], 7, 1, 10, 3, 11.6, 5] } });
@@ -152,7 +168,7 @@ function planeGeom(lon, lat, span) {
   return PLANE_SHAPE.map(r => { const ring = r.map(([x, y]) => metersLL(lon, lat, (x * c - y * s) * span, (x * s + y * c) * span)); ring.push(ring[0]); return ring; });
 }
 function updatePlane() {
-  const [lon, lat] = toLL(pl.x, pl.y), z = map.getZoom(), span = clamp(36 * Math.pow(2, 16.1 - z) * (viewMode === 0 ? .5 : 1), 50, 9000), gnd = map.getTerrain() ? elev(pl.x, pl.y) : 0, h = Math.max(30, (pl.alt - gnd) * FT * EX);
+  const [lon, lat] = toLL(pl.x, pl.y), z = map.getZoom(), span = clamp(36 * Math.pow(2, 16.1 - z) * (viewMode === 0 ? .5 : 1), 50, 9000), gnd = map.getTerrain() ? elev(pl.x, pl.y) : 0, h = typeof OPS !== 'undefined' && OPS.onGround ? 1.5 : Math.max(30, (pl.alt - gnd) * FT * EX);
   map.getSource('plane').setData(fc([{ type: 'Feature', properties: { col: '#ff6a13', b: h, h: h + span * .12 }, geometry: { type: 'Polygon', coordinates: planeGeom(lon, lat, span) } }]));
   const sq = span * .03, fx = [{ type: 'Feature', properties: { p: 'shadow' }, geometry: { type: 'Polygon', coordinates: planeGeom(lon, lat, span) } }];
   const ring = (rad) => Array.from({ length: 33 }, (_, i) => metersLL(lon, lat, Math.cos(i / 32 * 6.283) * rad, Math.sin(i / 32 * 6.283) * rad));
@@ -163,7 +179,9 @@ function updatePlane() {
     const nx = -Math.cos(pl.hdg * D2R) * w, ny = -Math.sin(pl.hdg * D2R) * w;
     fx.push({ type: 'Feature', properties: { p: 'hdg', col: '#ffcc33', b: h, h: h + w * 2 }, geometry: { type: 'Polygon', coordinates: [[metersLL(la, ta, nx, ny), metersLL(lb, tb, nx, ny), metersLL(lb, tb, -nx, -ny), metersLL(la, ta, -nx, -ny), metersLL(la, ta, nx, ny)]] } }); }
   map.getSource('planeFx').setData(fc(fx));
+  if (typeof opsRoute === 'function' && map.getSource('fld-route')) { const r = opsRoute(); map.getSource('fld-route').setData(fc(r ? [line(r)] : [])); }
 }
+setOpsZoom = function (kind) { CAM.zoomT = { ground: 16.2, pattern: 13.2, enroute: 10.3 }[kind]; };
 function applyMode() {
   const three = viewMode !== 0;
   if (map.getSource('dem')) map.setTerrain(three && terrainOn ? { source: 'dem', exaggeration: EX } : null);
@@ -227,7 +245,8 @@ render = function () {
     map = new maplibregl.Map({ container: 'map', style: sectionalTint(style), center: c, zoom: 10.3, pitch: 62, bearing: 112, maxPitch: 78, dragPan: false, keyboard: false,
       pixelRatio: Math.min(devicePixelRatio || 1, 1.5),   // full Retina resolution costs a lot of GPU for little gain here
       attributionControl: { compact: true }, fadeDuration: 0 });
-    map.on('load', () => { addLayers(); if (FEATURES.traffic && typeof initTraffic === 'function') initTraffic(map); wireGestures(); mapReady = true; mapReadyHook(); });
+    map.on('load', () => { addLayers(); if (FEATURES.traffic && typeof initTraffic === 'function') initTraffic(map); wireGestures(); mapReady = true; mapReadyHook();
+      if (typeof OPS !== 'undefined' && OPS.onGround) { setOpsZoom('ground'); CAM.zoom = CAM.zoomT; } });
     map.on('click', e => info(e.point.x, e.point.y));
   }).catch(err => { document.getElementById('startBtn').textContent = 'Map tiles unavailable'; console.error(err); });
 })();
