@@ -106,11 +106,11 @@
   <div class="row2">
     <button type="button" id="bRadio">RADIO</button>
     <button type="button" id="bView">3D</button>
-    <button type="button" id="bChart">TAC</button>
-    <button type="button" id="bSpeed" hidden>8×</button>
+    <button type="button" id="bChart">CHART</button>
+    <button type="button" id="bSpeed">8×</button>
     <button type="button" id="bZout" aria-label="Zoom out">−</button>
     <button type="button" id="bZin" aria-label="Zoom in">+</button>
-    <button type="button" id="bAir" aria-label="Show or hide airspace" class="on">AIR</button>
+    <button type="button" id="bAir" aria-label="Show or hide airspace" hidden>AIR</button>
     <button type="button" id="bNav" aria-label="Navigator">NAV</button>
     <button type="button" id="bInst" aria-label="Flight instruments">INST</button>
     <button type="button" id="bPause" aria-label="Pause">II</button>
@@ -128,8 +128,8 @@
     <div class="notam" id="briefNotam"></div>
     <ul>
       <li><b>◀ ▶</b> (hold) set the heading bug, and the plane turns to it at standard rate · <b>▲ ▼</b> change target altitude by 500 ft</li>
-      <li><b>RADIO</b> call Potomac Approach, a tower, or self-announce on the CTAF · <b>AIR</b> shows or hides the airspace (hidden to start; the rules always apply)</li>
-      <li><b>3D</b> shows the airspace as stacked slabs · <b>TAC</b> swaps in the real FAA chart</li>
+      <li><b>RADIO</b> call Potomac Approach, a tower, or self-announce on the CTAF · the <b>cog</b> opens Settings, including airspace (hidden to start; the rules always apply)</li>
+      <li><b>3D</b> shows the airspace as stacked slabs · <b>CHART</b> swaps in the real FAA chart</li>
       <li>Tap anything on the map to find out what it is · pinch or <b>− +</b> to zoom · drag to look around</li>
       <li><b>NAV</b> opens the touchscreen navigator: GS, TRK, DIS and DTK, a moving map, the flight plan, nearest airports and Direct-To</li>
       <li>Keyboard: ← → heading bug, ↑ ↓ altitude, R radio, V 3D, C chart, X speed, N navigator, Q questions on/off, P pause, L land</li>
@@ -1229,7 +1229,7 @@ document.getElementById('settings').addEventListener('click', e => {
   openSettings();
 });
 function toggleView() { cam.view = cam.view === '2d' ? '3d' : '2d'; document.getElementById('bView').textContent = cam.view === '2d' ? '3D' : '2D'; }
-function toggleChart() { cam.chart = !cam.chart; document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; }
+function toggleChart() { cam.chart = !cam.chart; document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'CHART'; }
 function cycleSpeed() { const r = [1, 4, 8, 16]; simRate = r[(r.indexOf(simRate) + 1) % r.length]; document.getElementById('bSpeed').textContent = simRate + '×'; }
 function togglePause() { paused = !paused; document.getElementById('bPause').textContent = paused ? '▶' : 'II'; }
 const holdBtn = (id, k) => { const b = document.getElementById(id); const on = e => { e.preventDefault(); hold[k] = true; b.classList.add('on'); }, off = () => { hold[k] = false; b.classList.remove('on'); }; b.addEventListener('pointerdown', on); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, off); };

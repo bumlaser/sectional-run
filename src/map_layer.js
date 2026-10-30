@@ -167,7 +167,7 @@ function updatePlane() {
 function applyMode() {
   const three = viewMode !== 0;
   if (map.getSource('dem')) map.setTerrain(three && terrainOn ? { source: 'dem', exaggeration: EX } : null);
-  for (const id of ['x-sfra', 'x-moa', 'x-b', 'x-sua', 'x-d', 'obs3']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', three ? 'visible' : 'none');
+  for (const id of ['x-sfra', 'x-moa', 'x-b', 'x-sua', 'x-d', 'obs3']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', three && (id === 'obs3' || airOn) ? 'visible' : 'none');   // airspace slabs respect the airspace setting
   if (viewMode === 2) { CAM.bearing = map.getBearing(); CAM.pitchT = MODES[2].pitch; }
   document.getElementById('bView').textContent = MODES[viewMode].name;
 }
@@ -209,10 +209,10 @@ P = function (x, y) { if (!map) return [0, 0]; const p = map.project(toLL(x, y))
 unP = function (sx, sy) { const ll = map.unproject([sx, sy]); return fromLL(ll.lng, ll.lat); };
 viewName = () => MODES[viewMode].name[0] + MODES[viewMode].name.slice(1).toLowerCase();
 toggleView = function () { viewMode = (viewMode + 1) % MODES.length; applyMode(); };
-toggleChart = function () { cam.chart = !cam.chart; for (const id of ['sec', 'tac']) map.setLayoutProperty(id, 'visibility', cam.chart ? 'visible' : 'none'); document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; };
+toggleChart = function () { cam.chart = !cam.chart; for (const id of ['sec', 'tac']) map.setLayoutProperty(id, 'visibility', cam.chart ? 'visible' : 'none'); document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'CHART'; };
 const AIR_LAYERS = ['e5', 'frz-fill', 'sua-hatch', 'vol-line', 'vol-dash', 'vlab', 'x-d', 'x-sua', 'x-b', 'x-moa', 'x-sfra'];
 const setAir2D = setAir;
-setAir = function (on) { setAir2D(on); if (map && mapReady) for (const id of AIR_LAYERS) map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none'); };
+setAir = function (on) { setAir2D(on); if (map && mapReady) { for (const id of AIR_LAYERS) map.setLayoutProperty(id, 'visibility', on && (viewMode !== 0 || !id.startsWith('x-')) ? 'visible' : 'none'); } };   // slabs only in the 3D camera modes
 zoom = function (f) { CAM.zoomT = clamp(CAM.zoomT + Math.log2(f) * 1.2, 5.5, 15.5); };
 render = function () {
   if (!mapReady || !pl) return;

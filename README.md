@@ -112,7 +112,7 @@ The **cog** button at the end of the dock opens Settings, which pauses the fligh
 Checkride questions (off by default), Airspace, 3D terrain (3D build), Navigator, Sim speed and Camera.
 The navigator's Utilities page keeps only navigation functions: heading bug to DTK, and restore flight plan.
 
-The **AIR** button (or the A key) shows and hides the airspace drawing. Airspace starts hidden. The airspace rules
+Settings (or the A key) shows and hides the airspace drawing. Airspace starts hidden. The airspace rules
 always apply, hidden or not.
 
 ## Wind
@@ -145,7 +145,7 @@ checked (21, 24, 13, 13, 17, 06). The 3D version also streams the same tiles for
 To refresh the data, run `tools/fetch_faa.py` (FAA layers), `tools/masks.py` (water and town mask plus the
 reprojected TAC, which needs the TAC GeoTIFF) and `tools/build_world.py` (`data/derived/world.json`). The scripts expect
 the chart GeoTIFFs in a local `charts/` folder; they aren't committed.
-The 3D build's TAC button streams the FAA's own chart tiles (`VFR_Sectional` and `VFR_Terminal` on
+The 3D build's CHART button streams the FAA's own chart tiles (`VFR_Sectional` and `VFR_Terminal` on
 tiles.arcgis.com). They cover the whole US and update every 56-day cycle. A self-hosted version is in commit c96b681
 (`tools/build_tiles.py`).
 
@@ -165,7 +165,7 @@ tiles.arcgis.com). They cover the whole US and update every 56-day cycle. A self
   - R-4001 status, the BAL VOR rose, and the CTAF arrival at Bay Bridge
 - **Radio:** Potomac Approach (a Bravo clearance isn't guaranteed), Class D towers, flight service for SUA status,
   and the Bay Bridge CTAF.
-- **TAC button:** swaps the stylized map for the real FAA chart, reprojected to line up.
+- **CHART button:** swaps the stylized map for the real FAA chart, reprojected to line up.
 
 ## The fictional prototype (fictional.html)
 

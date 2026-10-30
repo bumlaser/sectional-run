@@ -26,8 +26,8 @@ m = patch(m, '</style>', """  #map { position:fixed; inset:0; background:#dde8c6
 </style>""")
 m = patch(m, '<canvas id="c"', '<div id="map" aria-label="Map"></div>\n<canvas id="c"')
 m = patch(m, '<button type="button" id="bView">3D</button>', '<button type="button" id="bView">CHASE</button>')
-m = patch(m, '<li><b>3D</b> shows the airspace as stacked slabs · <b>TAC</b> swaps in the real FAA chart</li>',
-          '<li><b>CHASE / ORBIT / 2D</b> cycles the camera: track-up behind the plane, free orbit (drag or two-finger twist and tilt), or flat north-up · <b>TAC</b> overlays the real FAA chart</li>')
+m = patch(m, '<li><b>3D</b> shows the airspace as stacked slabs · <b>CHART</b> swaps in the real FAA chart</li>',
+          '<li><b>CHASE / ORBIT / 2D</b> cycles the camera: track-up behind the plane, free orbit (drag or two-finger twist and tilt), or flat north-up · <b>CHART</b> overlays the real FAA chart</li>')
 m = patch(m, "  buildBase(); newGame();\n  const b = document.getElementById('startBtn'); b.disabled = false; b.textContent = 'Start flight'; b.click();",
           "  base = true; newGame(); maskReady = true; if (typeof enableStart === 'function') enableStart();")
 m = patch(m, "const mimg = new Image();", "let maskReady = false;\nconst mimg = new Image();")
