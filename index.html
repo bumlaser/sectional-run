@@ -57,6 +57,8 @@
   .overlay h2 { margin:0 0 14px; font:bold 13px var(--mono); letter-spacing:2px; color:#9fb3c3; text-transform:uppercase; }
   .overlay p { line-height:1.5; margin:8px 0; } .overlay ul { margin:8px 0; padding-left:20px; line-height:1.5; }
   .overlay .go { font:900 22px var(--display); letter-spacing:2px; background:var(--amber); color:#111; padding:10px 26px; margin-top:12px; box-shadow:4px 4px 0 #000; }
+  .opt { display:flex; gap:10px; align-items:center; margin:12px 0 4px; font-size:15px; cursor:pointer; }
+  .opt input { width:20px; height:20px; accent-color:var(--amber); }
   .notam { font-family:var(--mono); font-size:13px; background:#0b0f13; border:1px dashed #50606d; padding:8px 10px; margin:10px 0; line-height:1.5; }
   .fine { font-size:12px; color:#8c9aa6; }
   table { border-collapse:collapse; width:100%; font-size:14px; margin:10px 0; }
@@ -104,8 +106,9 @@
       <li><b>RADIO</b> call Potomac Approach, a tower, or self-announce on the CTAF</li>
       <li><b>3D</b> shows the airspace as stacked slabs · <b>TAC</b> swaps in the real FAA chart</li>
       <li>Tap anything on the map to find out what it is · pinch or <b>− +</b> to zoom · drag to look around</li>
-      <li>Keyboard: ← → turn, ↑ ↓ altitude, R radio, V 3D, C chart, X speed, P pause, L land</li>
+      <li>Keyboard: ← → turn, ↑ ↓ altitude, R radio, V 3D, C chart, X speed, Q questions on/off, P pause, L land</li>
     </ul>
+    <label class="opt"><input type="checkbox" id="optQuiz" checked> Ask checkride questions along the way</label>
     <button class="go" id="startBtn" type="button" disabled>Loading chart…</button>
     <p class="fine">Airspace, airports, obstacles and VORs come from FAA ADDS data. Water and towns are traced from the FAA Baltimore–Washington TAC. The SFRA and FRZ are approximate rings, and terrain heights are estimated. This is a practice game: not for navigation, and no substitute for current charts, NOTAMs and SFRA training.</p>
   </div>
@@ -222,6 +225,8 @@ function resize() { DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H 
 addEventListener('resize', resize); resize();
 const cam = { cx: 0, cy: 0, s: 20, T: 1, hz: 0, yc: .5, px: 0, py: 0, lastPan: -99, view: '2d', chart: false };
 let pl, game, simRate = 8, paused = false, running = false;
+let quizOn = true; try { quizOn = localStorage.getItem('sr.quiz') !== '0'; } catch (_) {}
+function setQuiz(on) { quizOn = on; try { localStorage.setItem('sr.quiz', on ? '1' : '0'); } catch (_) {} const cb = document.getElementById('optQuiz'); if (cb) cb.checked = on; }
 const hold = { left: false, right: false }, keys = {};
 const SUA_STATUS = {};
 function newGame() {
@@ -301,7 +306,7 @@ function hemiQuiz() {
     why: `Above 3,000 ft AGL, VFR cruising altitudes follow magnetic course. 000°–179° use odd thousands plus 500, and 180°–359° use even thousands plus 500. Under the Bravo shelves you'll often be lower than 3,000 AGL, where the rule doesn't apply.` };
 }
 function checkQuizzes() {
-  if (game.quiz || !running) return;
+  if (game.quiz || !running || !quizOn) return;
   for (const q of QUIZ) if (!game.asked[q.id] && q.when()) return openQuiz(q);
   if (!game.asked.hemi && game.levelT > 25 && pl.alt - elev(pl.x, pl.y) > 3000) openQuiz(hemiQuiz());
 }
@@ -334,12 +339,14 @@ function posn(x, y) { const d = Math.hypot(pl.x - x, pl.y - y), b = brg(x, y, pl
 function openRadio() {
   const rows = facilities().map(f => { const st = f.g === 'B' && game.clrB ? '<span class="pos">CLEARED ✓</span>' : game.contact[f.g] ? '<span class="pos">TWO-WAY ✓</span>' : f.g === 'CTAF' && game.ctaf ? '<span class="pos">ANNOUNCED ✓</span>' : '';
     return `<div class="fac"><div><b>${f.name}</b> ${st}<br><small>${f.note} · ${Math.hypot(pl.x - f.x, pl.y - f.y).toFixed(0)} NM</small></div><button type="button" data-call="${f.g}">${f.act}</button></div>`; }).join('');
+  const qrow = `<div class="fac"><div><b>Checkride questions</b><br><small>${quizOn ? 'on: questions pop up at chart features' : 'off: free flight, no questions'}</small></div><button type="button" data-call="QUIZ">${quizOn ? 'Turn off' : 'Turn on'}</button></div>`;
   const fss = `<div class="fac"><div><b>Leesburg Radio (Flight Service)</b><br><small>special use airspace status</small></div><button type="button" data-call="FSS">SUA status?</button></div>`;
   const log = game.radioLog.slice(-4).map(m => `<p style="margin:4px 0;font-family:var(--mono);font-size:12px;color:${m.who === 'YOU' ? '#9fd3ff' : '#9df27f'}">${m.who}: ${m.text}</p>`).join('');
-  document.getElementById('sheetCard').innerHTML = `<div class="kicker">RADIO · N421AP</div><h3>Who do you want to call?</h3>${rows || '<p>No approach, tower or CTAF in range.</p>'}${fss}${log ? '<div style="margin-top:10px">' + log + '</div>' : ''}<div class="actions"><button type="button" data-close>Close</button></div>`;
+  document.getElementById('sheetCard').innerHTML = `<div class="kicker">RADIO · N421AP</div><h3>Who do you want to call?</h3>${rows || '<p>No approach, tower or CTAF in range.</p>'}${fss}${qrow}${log ? '<div style="margin-top:10px">' + log + '</div>' : ''}<div class="actions"><button type="button" data-close>Close</button></div>`;
   showSheet(true);
 }
 function call(g) {
+  if (g === 'QUIZ') { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); return openRadio(); }
   if (g === 'FSS') { radioMsg('YOU', 'Leesburg Radio, N421AP, request status of the restricted areas along the bay.'); radioMsg('FSS', `N421AP, ${rStatusLine().replace(/<\/?b>/g, '')}. And remember, no SFRA flight plan on file for you.`); return openRadio(); }
   const f = facilities().find(f => f.g === g); if (!f) return;
   if (g === 'B') {
@@ -555,7 +562,7 @@ addEventListener('keydown', e => {
   if (keys[e.code]) return; keys[e.code] = true; if (!running || game.over) return;
   if (game.quiz && !game.quiz.done) { const n = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code]; if (n !== undefined) answerQuiz(n); return; }
   if (!document.getElementById('sheet').hidden) { if (e.code === 'Escape' || e.code === 'Enter') closeSheet(); return; }
-  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyL: land, Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
+  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); }, KeyL: land, Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; hold.left = hold.right = false; });
@@ -630,6 +637,7 @@ function showEnd() {
   document.getElementById('end').hidden = false;
   document.getElementById('againBtn').onclick = () => { document.getElementById('end').hidden = true; newGame(); running = true; };
 }
+setQuiz(quizOn); document.getElementById('optQuiz').addEventListener('change', e => setQuiz(e.target.checked));
 document.getElementById('startBtn').addEventListener('click', () => { document.getElementById('title').hidden = true; running = true; last = performance.now(); });
 // load the traced mask (and the real chart layer), then build the map
 const mimg = new Image();
