@@ -82,9 +82,9 @@ checked (21, 24, 13, 13, 17, 06). The 3D version also streams the same tiles for
 To refresh the data, run `tools/fetch_faa.py` (FAA layers), `tools/masks.py` (water and town mask plus the
 reprojected TAC, which needs the TAC GeoTIFF) and `tools/build_world.py` (`data/derived/world.json`). The scripts expect
 the chart GeoTIFFs in a local `charts/` folder; they aren't committed.
-The 3D build's TAC button shows XYZ tiles in `3d/tiles/chart/` (z7 to z13, about 46 MB of WebP), made by
-`python3 tools/build_tiles.py charts`. Inside its border it uses the TAC at full resolution, and the Washington Sectional
-fills in around it. Re-run it with each 56-day chart cycle.
+The 3D build's TAC button streams the FAA's own chart tiles (`VFR_Sectional` and `VFR_Terminal` on
+tiles.arcgis.com). They cover the whole US and update every 56-day cycle. A self-hosted version is in commit c96b681
+(`tools/build_tiles.py`).
 
 ## The real mission (index.html)
 

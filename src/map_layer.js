@@ -71,10 +71,12 @@ function addLayers() {
     map.addLayer({ id: 'mefq', type: 'line', source: 'mefq', paint: { 'line-color': '#1d5fae', 'line-opacity': .2, 'line-width': 1 } }, firstSymbol);
     map.addLayer({ id: 'mefl', type: 'symbol', source: 'mefl', layout: { 'text-field': ['concat', ['slice', ['get', 't'], 0, ['-', ['length', ['get', 't']], 1]], ' ', ['slice', ['get', 't'], ['-', ['length', ['get', 't']], 1]]], 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 7, 18, 11, 40], 'text-allow-overlap': true, 'text-pitch-alignment': 'map' },
       paint: { 'text-color': 'rgba(29,95,174,.42)' } }, firstSymbol); }
-  // real chart: XYZ tiles cut from the FAA GeoTIFFs (tools/build_tiles.py), TAC inside its neatline, sectional around it
-  map.addSource('tac', { type: 'raster', tiles: [location.href.replace(/[?#].*$/, '').replace(/[^/]*$/, '') + 'tiles/chart/{z}/{x}/{y}.webp'], tileSize: 256,
-    minzoom: 7, maxzoom: 13, bounds: [-78.2, 38.3, -75.7, 40.07], attribution: 'Charts: FAA Aeronautical Information Services' });
-  map.addLayer({ id: 'tac', type: 'raster', source: 'tac', layout: { visibility: 'none' }, paint: { 'raster-opacity': 1, 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, firstSymbol);
+  // real chart: the FAA's own seamless tile services (whole US, current 56-day cycle). Sectional underneath, TACs over it
+  // where they exist (transparent outside each TAC's neatline, 404 where there is none).
+  const faa = n => `https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/${n}/MapServer/tile/{z}/{y}/{x}`, CH = 'Charts: FAA Aeronautical Information Services';
+  map.addSource('sec', { type: 'raster', tiles: [faa('VFR_Sectional')], tileSize: 256, minzoom: 8, maxzoom: 12, attribution: CH });
+  map.addSource('tac', { type: 'raster', tiles: [faa('VFR_Terminal')], tileSize: 256, minzoom: 10, maxzoom: 12 });
+  for (const id of ['sec', 'tac']) map.addLayer({ id, type: 'raster', source: id, layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, firstSymbol);
 
   const ruled = VOL.filter(v => RULED.includes(v.k));
   map.addSource('vol', { type: 'geojson', data: fc(VOL.map(volFeat)) });
@@ -205,7 +207,7 @@ function wireGestures() {
 P = function (x, y) { if (!map) return [0, 0]; const p = map.project(toLL(x, y)); return [p.x, p.y]; };
 unP = function (sx, sy) { const ll = map.unproject([sx, sy]); return fromLL(ll.lng, ll.lat); };
 toggleView = function () { viewMode = (viewMode + 1) % MODES.length; applyMode(); };
-toggleChart = function () { cam.chart = !cam.chart; map.setLayoutProperty('tac', 'visibility', cam.chart ? 'visible' : 'none'); document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; };
+toggleChart = function () { cam.chart = !cam.chart; for (const id of ['sec', 'tac']) map.setLayoutProperty(id, 'visibility', cam.chart ? 'visible' : 'none'); document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; };
 zoom = function (f) { CAM.zoomT = clamp(CAM.zoomT + Math.log2(f) * 1.2, 5.5, 15.5); };
 render = function () {
   if (!mapReady || !pl) return;
