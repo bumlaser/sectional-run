@@ -16,7 +16,7 @@
     --shadow:0 2px 4px -1px rgba(0,0,0,.2), 0 4px 5px rgba(0,0,0,.14), 0 1px 10px rgba(0,0,0,.12);
     color-scheme: dark;
   }
-  html, body { height:100%; margin:0; background:#333; color:var(--ink); font-family:var(--body); overflow:hidden; }
+  html, body { height:100%; margin:0; background:#1b2617; color:var(--ink); font-family:var(--body); overflow:hidden; }
   canvas { display:block; touch-action:none; }
   [hidden] { display:none !important; }
   button { font:500 13px var(--body); letter-spacing:.4px; text-transform:uppercase; color:#fff; background:var(--paper2); border:0; border-radius:4px; box-shadow:var(--shadow);
@@ -1054,7 +1054,7 @@ function drawAirports() {
     if (cam.s > 70) for (const r of rws) { const [p0, p1] = [P(r[0], r[1]), P(r[2], r[3])]; ctx.strokeStyle = 'rgba(60,62,66,.9)'; ctx.lineWidth = Math.max(2.5, r[5] / 6076 * cam.s); ctx.beginPath(); ctx.moveTo(...p0); ctx.lineTo(...p1); ctx.stroke(); }
     if ((cam.s > 10 || big || a === DEST || a === START) && (cam.hz < .001 || d2(a) < 12 || a === DEST)) { const nm = a.n.toUpperCase().replace(/\/.*$/, '');
       label(`${nm} (${a.id})`, x + rr + 6, y - 6, col, 11, '900', 'left'); label(`${AP_FREQ[a.id] ? AP_FREQ[a.id] + (a.tw ? ' ★' : '') + ' · ' : a.tw ? 'CT ★ · ' : ''}${a.e} ft`, x + rr + 6, y + 7, col, 10, 'bold', 'left'); }
-    if (a === DEST) { ctx.strokeStyle = '#FFD600'; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.ellipse(x, y, 24, 24 * cam.T, 0, 0, 6.283); ctx.stroke(); ctx.setLineDash([]); } }
+    if (a === DEST) { ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.ellipse(x, y, 24, 24 * cam.T, 0, 0, 6.283); ctx.stroke(); ctx.setLineDash([]); } }
 }
 function drawVolumes3D() {
   const cap = z => Math.min(z, 12500), order = VOL.filter(v => RULED.includes(v.k) && visibleVol(v)).sort((a, b) => (b.bb[2] - b.bb[0]) * (b.bb[3] - b.bb[1]) - (a.bb[2] - a.bb[0]) * (a.bb[3] - a.bb[1]));
