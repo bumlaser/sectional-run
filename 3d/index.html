@@ -801,7 +801,8 @@ const SUA_STATUS = {};
 function newGame() {
   const [sx, sy] = [START.x + .9, START.y + .5];
   pl = { x: sx, y: sy, hdg: 112, bug: 112, alt: 1800, tgt: 2500, vs: 0, rate: 0, bank: 0, patt: 2 };
-  for (const v of VOL) if (v.k === 'R') SUA_STATUS[v.grp] = /CONT|0000-2400/i.test(v.tou) ? true : (SUA_STATUS[v.grp] ?? Math.random() < .6);
+  for (const v of VOL) if (v.k === 'R') SUA_STATUS[v.grp] = v.grp === 'R:R-4009' ? (SUA_STATUS[v.grp] ?? Math.random() < .4)   // R-4009: hot only while a VIP is at Camp David (random each session); P-40 below it is always active
+    : /CONT|0000-2400/i.test(v.tou) ? true : (SUA_STATUS[v.grp] ?? Math.random() < .6);
   game = { t: 0, score: 0, log: [], over: false, inside: {}, contact: { 'D:FDK': true }, clrB: null, asked: {}, quiz: null, correct: 0, quizzes: 0, levelT: 0,
     hemiSegs: {}, towerHits: {}, cityHit: false, ctaf: false, viol: 0, radioLog: [], warned: {}, seenUnder: null };
   game.radioLog.push({ who: 'TWR', text: 'N421AP, Frederick Tower, departure approved, frequency change approved when clear of the Delta.', t: 0 });
@@ -970,7 +971,8 @@ function enter(g, v) {
   else if (v.k === 'SFRA') { game.viol++; addScore(-400, 'Entered the DC SFRA without a flight plan!'); radioMsg('ATC', 'N421AP, Potomac Approach, you are inside the SFRA without authorization. Turn immediately to exit, and expect a phone number.'); }
   else if (v.k === 'FRZ') { game.viol++; addScore(-800, 'Penetrated the DC Flight Restricted Zone!'); }
   else if (v.k === 'P') { game.viol++; addScore(-500, `Flew into prohibited area ${v.n}!`); }
-  else if (v.k === 'R') { if (SUA_STATUS[g]) { game.viol++; addScore(-300, `Entered ${v.n} while it was active`); } else flash(`In ${v.n}. It's cold today, so that's legal`, '#71CF88'); }
+  else if (v.k === 'R') { const vip = g === 'R:R-4009';
+    if (SUA_STATUS[g]) { game.viol++; addScore(-300, `Entered ${v.n} while it was active${vip ? ' (VIP at Camp David)' : ''}`); } else flash(`In ${v.n}. ${vip ? 'No VIP at Camp David today' : 'It\'s cold today'}, so that's legal`, '#71CF88'); }
   else if (v.k === 'MOA') flash(`Entering ${v.n}. Watch for military traffic`, '#FFB84D');
 }
 let landShown = null;
