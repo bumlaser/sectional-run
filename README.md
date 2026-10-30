@@ -62,16 +62,10 @@ They're drawn on canvas from the same SVG layers, using the Qt widgets' position
 
 The HDG knob works in both modes.
 
-## Intercepts and air defense
+## Mothballed features
 
-Entering the **DC SFRA** without authorization, or a prohibited area like **P-40**, brings out two interceptors.
-They follow the AIM 5-6-13 procedure: the lead takes position ahead and to the left, rocks its wings, then makes a slow level
-turn toward the way out. Respond with **Rock wings** (or the W key), **Call 121.5** and **Squawk 7700**, then set your
-heading bug to follow. Do that and the lead breaks away ("you may proceed"), and you score points for each step.
-Ignore it and you get warning flares, then the wingman fires: cartoon missiles, a fireball and a mushroom
-cloud, and a debrief of what you should have done. Entering the **DC FRZ** launches a SAM. Sim speed is capped at 2×
-during an intercept. Both renderers share `drawFX()`, and the 3D version projects the effects at their real
-altitude using MapLibre's terrain-aware transform.
+- **Fighter intercepts and DC FRZ SAMs** (AIM 5-6-13 intercept procedure, warning flares, cartoon missiles) live on
+  the `mothball/intercepts` branch. To bring them back: `git cherry-pick b734b91`, then `python3 tools/build_page.py`.
 
 ## Terrain and MEFs
 

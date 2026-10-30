@@ -199,11 +199,7 @@ function wireGestures() {
   el.addEventListener('contextmenu', e => e.preventDefault());
 }
 // --- hook the game's view functions --------------------------------------------------------
-P = function (x, y, z) {
-  if (!map) return [0, 0];
-  const tr = map.transform;
-  if (z && tr.pixelMatrix3D && tr.coordinatePoint) { const p = tr.coordinatePoint(tr.locationCoordinate(maplibregl.LngLat.convert(toLL(x, y))), z * FT * EX, tr.pixelMatrix3D); return [p.x, p.y]; }   // altitude-aware, matching the extruded plane
-  const p = map.project(toLL(x, y)); return [p.x, p.y]; };
+P = function (x, y) { if (!map) return [0, 0]; const p = map.project(toLL(x, y)); return [p.x, p.y]; };
 unP = function (sx, sy) { const ll = map.unproject([sx, sy]); return fromLL(ll.lng, ll.lat); };
 toggleView = function () { viewMode = (viewMode + 1) % MODES.length; applyMode(); };
 toggleChart = function () { cam.chart = !cam.chart; map.setLayoutProperty('tac', 'visibility', cam.chart ? 'visible' : 'none'); document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; };
@@ -213,7 +209,7 @@ render = function () {
   updateCamera();
   const now = performance.now(); if (now - planeT > 50) { planeT = now; updatePlane(); }   // ~20 Hz: rebuilding the plane geometry every frame is the costliest part
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
-  drawFX(); drawHUD();
+  drawHUD();
 };
 (function initMap() {
   const c = toLL(START.x, START.y);
