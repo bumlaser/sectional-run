@@ -115,6 +115,13 @@ The navigator's Utilities page keeps only navigation functions: heading bug to D
 Settings (or the A key) shows and hides the airspace drawing. Airspace starts hidden. The airspace rules
 always apply, hidden or not.
 
+## Start and map edge
+
+The flight starts 5 NM from Frederick on the direct course to Bay Bridge. That's just clear of the Class D,
+heading away at 2,300 ft and climbing to 2,500. The world ends where the chart and FAA data end, about
+93 × 76 NM. Within 3 NM of the edge, heading outward, the heading bug bounces off the edge with an
+"Edge of the map" message, rather than the plane stopping at an invisible wall.
+
 ## Wind
 
 Wind is random for each session (each page load) and the same everywhere for now. It's usually light to

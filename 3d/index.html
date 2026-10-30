@@ -799,13 +799,13 @@ function setQuiz(on) { quizOn = on; try { localStorage.setItem('sr.quiz2', on ? 
 const hold = { left: false, right: false }, keys = {};
 const SUA_STATUS = {};
 function newGame() {
-  const [sx, sy] = [START.x + .9, START.y + .5];
-  pl = { x: sx, y: sy, hdg: 112, bug: 112, alt: 1800, tgt: 2500, vs: 0, rate: 0, bank: 0, patt: 2 };
+  const crs = brg(START.x, START.y, DEST.x, DEST.y), sx = START.x + Math.sin(crs * D2R) * 5, sy = START.y - Math.cos(crs * D2R) * 5;   // 5 NM out on course: just clear of the Delta
+  pl = { x: sx, y: sy, hdg: crs, bug: crs, alt: 2300, tgt: 2500, vs: 0, rate: 0, bank: 0, patt: 2 };
   for (const v of VOL) if (v.k === 'R') SUA_STATUS[v.grp] = v.grp === 'R:R-4009' ? (SUA_STATUS[v.grp] ?? Math.random() < .4)   // R-4009: hot only while a VIP is at Camp David (random each session); P-40 below it is always active
     : /CONT|0000-2400/i.test(v.tou) ? true : (SUA_STATUS[v.grp] ?? Math.random() < .6);
   game = { t: 0, score: 0, log: [], over: false, inside: {}, contact: { 'D:FDK': true }, clrB: null, asked: {}, quiz: null, correct: 0, quizzes: 0, levelT: 0,
     hemiSegs: {}, towerHits: {}, cityHit: false, ctaf: false, viol: 0, radioLog: [], warned: {}, seenUnder: null };
-  game.radioLog.push({ who: 'TWR', text: 'N421AP, Frederick Tower, departure approved, frequency change approved when clear of the Delta.', t: 0 });
+  game.radioLog.push({ who: 'TWR', text: 'N421AP, Frederick Tower, frequency change approved. Good day.', t: 0 });
   game.nav = { plan: [START.id, DEST.id], wpt: DEST.id, origin: [START.x, START.y], direct: false }; game.lastFac = 'Frederick Tower';
   cam.cx = pl.x; cam.cy = pl.y; cam.px = cam.py = 0; cam.s = clamp(Math.min(W, H) / 18, 14, 40);
   document.getElementById('briefNotam').innerHTML = briefing(); updateLand(true);
@@ -946,10 +946,21 @@ function step(dt) {
   pl.bank += clamp(bankT - pl.bank, -12 * dt, 12 * dt);
   const dA = pl.tgt - pl.alt, rate = dA > 0 ? 700 / 60 : 800 / 60;
   pl.vs = Math.abs(dA) < 2 ? 0 : Math.sign(dA) * rate; pl.alt += clamp(dA, -rate * dt, rate * dt);
+  edgeTurn();
   pl.x = clamp(pl.x + Math.sin(pl.hdg * D2R) * NMPS * dt, WORLD.x0 + 1, WORLD.x1 - 1); pl.y = clamp(pl.y - Math.cos(pl.hdg * D2R) * NMPS * dt, WORLD.y0 + 1, WORLD.y1 - 1);
   pl.patt += clamp((pl.vs > 0 ? 6 : pl.vs < 0 ? -2.5 : 2) - pl.patt, -3 * dt, 3 * dt);   // attitude for the instruments
   game.levelT = (pl.vs === 0 && Math.abs(turn) < .05) ? game.levelT + dt : 0;
   rules();
+}
+// The world ends where our chart and FAA data end. Near the edge, heading outward, the heading bug bounces off it
+// (the position clamp in step() is only a last resort).
+function edgeTurn() {
+  const m = 3, vx = Math.sin(pl.hdg * D2R), vy = -Math.cos(pl.hdg * D2R);
+  const outX = (pl.x < WORLD.x0 + m && vx < -.2) || (pl.x > WORLD.x1 - m && vx > .2), outY = (pl.y < WORLD.y0 + m && vy < -.2) || (pl.y > WORLD.y1 - m && vy > .2);
+  if (!outX && !outY) return;
+  let h = pl.hdg; if (outX) h = 360 - h; if (outY) h = 180 - h;   // bounce off the edge, so it never steers you into anything in particular
+  if (Math.abs(angDiff(pl.bug, norm(h))) > 20) pl.bug = norm(h);
+  if (game.t - (game.edgeT ?? -99) > 30) { game.edgeT = game.t; flash('Edge of the map: turning back', '#FFB84D', 2.6); }
 }
 function rules() {
   const now = {};
@@ -1164,16 +1175,21 @@ function drawWindWidget(cx, cy) {
 function drawHUD() {
   drawWindsocks();
   const narrow = W < 640, w = narrow ? W - 24 : 440, x = 12, y = 12, as = airspaceNow();
-  panel(x, y, w, 76);
-  ctx.fillStyle = '#9BF0E1'; ctx.fillRect(x, y + 8, 3, 60);   // Backstage's teal indicator
-  txt('SECTIONAL RUN', x + 14, y + 21, `bold 12px ${UIF}`, '#9BF0E1');
-  txt(`${Math.round(game.score)} pts · ${Math.floor(game.t / 60)}:${String(Math.floor(game.t % 60)).padStart(2, '0')}${paused ? ' · paused' : ''}`, x + w - 12, y + 21, `bold 12px ${UIF}`, '#ffffff', 'right');
-  txt(`Airspace: ${as.main}`, x + 14, y + 43, `bold ${narrow ? 14 : 15}px ${UIF}`, as.bad ? '#F84C55' : '#ffffff');
-  txt(as.note, x + 14, y + 62, `12px ${UIF}`, '#b5b5b5');
-  txt(`W29 ${d2(DEST).toFixed(0)} NM · ${hdg3(brg(pl.x, pl.y, DEST.x, DEST.y) + VAR)}°`, x + w - 12, y + 62, `bold 12px ${UIF}`, '#9CC9FF', 'right');
+  const PH = 54;   // status box: airspace + score on one line, details below
+  panel(x, y, w, PH);
+  ctx.fillStyle = '#9BF0E1'; ctx.fillRect(x, y + 8, 3, PH - 16);   // Backstage's teal indicator
+  const sc = `${Math.round(game.score)} pts · ${Math.floor(game.t / 60)}:${String(Math.floor(game.t % 60)).padStart(2, '0')}${paused ? ' · paused' : ''}`;
+  ctx.font = `bold 12px ${UIF}`; const scW = ctx.measureText(sc).width;
+  txt(sc, x + w - 12, y + 22, `bold 12px ${UIF}`, '#ffffff', 'right');
+  let aT = `Airspace: ${as.main}`, aS = narrow ? 14 : 15, aF = `bold ${aS}px ${UIF}`; ctx.font = aF;
+  while (aS > 11 && ctx.measureText(aT).width > w - 40 - scW) { aS--; aF = `bold ${aS}px ${UIF}`; ctx.font = aF; }   // shrink first, then trim, so it never runs into the score
+  while (aT.length > 12 && ctx.measureText(aT).width > w - 40 - scW) aT = aT.slice(0, -2).trimEnd() + '…';
+  txt(aT, x + 14, y + 22, aF, as.bad ? '#F84C55' : '#ffffff');
+  txt(as.note, x + 14, y + 42, `12px ${UIF}`, '#b5b5b5');
+  txt(`W29 ${d2(DEST).toFixed(0)} NM · ${hdg3(brg(pl.x, pl.y, DEST.x, DEST.y) + VAR)}°`, x + w - 12, y + 42, `bold 12px ${UIF}`, '#9CC9FF', 'right');
   const m = game.radioLog[game.radioLog.length - 1];
-  if (m && game.t - m.t < 25) { ctx.font = `13px ${UIF}`; const L = wrapT(`${m.who}: ${m.text}`, w - 24); panel(x, y + 82, w, 12 + L.length * 15); L.forEach((l, i) => txt(l, x + 12, y + 99 + i * 15, `13px ${UIF}`, m.who === 'YOU' ? '#9CC9FF' : '#71CF88')); }
-  { const rp = m && game.t - m.t < 25, my = narrow ? y + 76 + (rp ? 12 + wrapT(`${m.who}: ${m.text}`, w - 20).length * 15 + 6 : 0) + 44 : (cam.chart ? 40 : 12) + 36;
+  if (m && game.t - m.t < 25) { ctx.font = `13px ${UIF}`; const L = wrapT(`${m.who}: ${m.text}`, w - 24); panel(x, y + PH + 6, w, 12 + L.length * 15); L.forEach((l, i) => txt(l, x + 12, y + PH + 23 + i * 15, `13px ${UIF}`, m.who === 'YOU' ? '#9CC9FF' : '#71CF88')); }
+  { const rp = m && game.t - m.t < 25, my = narrow ? y + PH + (rp ? 12 + wrapT(`${m.who}: ${m.text}`, w - 20).length * 15 + 6 : 0) + 44 : (cam.chart ? 40 : 12) + 36;
     drawWindWidget(W - 12 - 36, my); }
   let fy = Math.max(H * .3, 200);
   for (const f of flashes) {   // snackbar-style chips with a status-coloured edge
