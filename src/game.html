@@ -26,6 +26,10 @@
   .readout .tgt { font-size:11px; color:var(--amber); white-space:nowrap; }
   #ctl .row2 { display:grid; grid-template-columns:repeat(9, minmax(0,1fr)); gap:5px; max-width:660px; width:100%; margin:0 auto; }
   #ctl .row2 button { min-height:40px; font-size:12px; }
+  #icptBar { display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:center; max-width:660px; width:100%; margin:0 auto; padding:6px; box-sizing:border-box;
+    background:rgba(150,20,24,.95); border:2px solid #000; box-shadow:3px 3px 0 #000; }
+  #icptBar b { font:900 15px var(--display); letter-spacing:1px; color:#fff; margin-right:4px; }
+  #icptBar button { font:bold 13px var(--mono); padding:9px 10px; }
   #landBtn { max-width:660px; width:100%; margin:0 auto; font:900 18px var(--display); letter-spacing:1px; background:var(--good); color:#111; min-height:46px; }
   .sheet { position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; justify-content:center; padding:0 12px calc(12px + env(safe-area-inset-bottom, 0px)); }
   .sheet .card { width:100%; max-width:560px; background:#141a1f; border:3px solid var(--amber); box-shadow:0 0 0 4px #000, 0 -10px 40px rgba(0,0,0,.6);
@@ -64,6 +68,7 @@
 
 <canvas id="c" aria-label="Sectional chart map"></canvas>
 <div id="ctl">
+  <div id="icptBar" hidden role="group" aria-label="Intercept response"><b>INTERCEPTED</b><button type="button" id="iRock">Rock wings</button><button type="button" id="i121">Call 121.5</button><button type="button" id="i7700">Squawk 7700</button></div>
   <button id="landBtn" type="button" hidden>LAND AT BAY BRIDGE</button>
   <div class="row1">
     <div class="grp" aria-label="Heading">
@@ -249,7 +254,7 @@ function newGame() {
   game = { t: 0, score: 0, log: [], over: false, inside: {}, contact: { 'D:FDK': true }, clrB: null, asked: {}, quiz: null, correct: 0, quizzes: 0, levelT: 0,
     hemiSegs: {}, towerHits: {}, cityHit: false, ctaf: false, viol: 0, radioLog: [], warned: {}, seenUnder: null };
   game.radioLog.push({ who: 'TWR', text: 'N421AP, Frederick Tower, departure approved, frequency change approved when clear of the Delta.', t: 0 });
-  game.nav = { plan: [START.id, DEST.id], wpt: DEST.id, origin: [START.x, START.y], direct: false }; game.lastFac = 'Frederick Tower';
+  game.nav = { plan: [START.id, DEST.id], wpt: DEST.id, origin: [START.x, START.y], direct: false }; game.lastFac = 'Frederick Tower'; game.fx = newFX(); icptBar(false);
   cam.cx = pl.x; cam.cy = pl.y; cam.px = cam.py = 0; cam.s = clamp(Math.min(W, H) / 18, 14, 40);
   document.getElementById('briefNotam').innerHTML = briefing(); updateLand(true);
 }
@@ -388,12 +393,13 @@ function step(dt) {
   pl.rate = Math.abs(e) < .05 ? 0 : trate; pl.hdg = norm(pl.hdg + pl.rate * dt); const turn = pl.rate;
   const bankT = Math.atan(pl.rate * D2R * TAS * 1.6878 / 32.174) / D2R;   // bank for a coordinated turn at this rate
   pl.bank += clamp(bankT - pl.bank, -12 * dt, 12 * dt);
+  if (pl.rockT > 0) pl.bank = bankT + 28 * Math.sin(pl.rockT * 7);   // rocking the wings
   const dA = pl.tgt - pl.alt, rate = dA > 0 ? 700 / 60 : 800 / 60;
   pl.vs = Math.abs(dA) < 2 ? 0 : Math.sign(dA) * rate; pl.alt += clamp(dA, -rate * dt, rate * dt);
   pl.x = clamp(pl.x + Math.sin(pl.hdg * D2R) * NMPS * dt, WORLD.x0 + 1, WORLD.x1 - 1); pl.y = clamp(pl.y - Math.cos(pl.hdg * D2R) * NMPS * dt, WORLD.y0 + 1, WORLD.y1 - 1);
   pl.patt += clamp((pl.vs > 0 ? 6 : pl.vs < 0 ? -2.5 : 2) - pl.patt, -3 * dt, 3 * dt);   // attitude for the instruments
   game.levelT = (pl.vs === 0 && Math.abs(turn) < .05) ? game.levelT + dt : 0;
-  rules();
+  rules(); fxStep(dt);
 }
 function rules() {
   const now = {};
@@ -412,15 +418,124 @@ function rules() {
 function enter(g, v) {
   if (v.k === 'B') { if (!game.clrB) { game.viol++; addScore(-300, 'Class B bust: no clearance'); radioMsg('ATC', 'N421AP, Potomac Approach, possible pilot deviation. Advise you call this number…'); } else flash('Inside Class B under your clearance', '#9df27f'); }
   else if (v.k === 'D') { if (!game.contact[g]) { game.viol++; addScore(-150, `Entered ${v.n.replace(' CLASS D', '')} Class D without two-way comms`); } else flash(`In the ${v.n.replace(' CLASS D', '')} Class D, in contact`, '#9df27f'); }
-  else if (v.k === 'SFRA') { game.viol++; addScore(-400, 'Entered the DC SFRA without a flight plan!'); radioMsg('ATC', 'N421AP, Potomac Approach, you are inside the SFRA without authorization. Turn immediately to exit, and expect a phone number.'); }
-  else if (v.k === 'FRZ') { game.viol++; addScore(-800, 'Penetrated the DC Flight Restricted Zone!'); }
-  else if (v.k === 'P') { game.viol++; addScore(-500, `Flew into prohibited area ${v.n}!`); }
+  else if (v.k === 'SFRA') { game.viol++; addScore(-400, 'Entered the DC SFRA without a flight plan!'); startIntercept(v); }
+  else if (v.k === 'FRZ') { game.viol++; addScore(-800, 'Penetrated the DC Flight Restricted Zone!'); startSAM(); }
+  else if (v.k === 'P') { game.viol++; addScore(-500, `Flew into prohibited area ${v.n}!`); if (v.n !== 'P-56') startIntercept(v); }
   else if (v.k === 'R') { if (SUA_STATUS[g]) { game.viol++; addScore(-300, `Entered ${v.n} while it was active`); } else flash(`In ${v.n}. It's cold today, so that's legal`, '#9df27f'); }
   else if (v.k === 'MOA') flash(`Entering ${v.n}. Watch for military traffic`, '#ffcc33');
 }
 let landShown = null;
 function updateLand(force) { const ok = running && !game.over && d2(DEST) < 3 && pl.alt < 2100 && game.ctaf; if (ok !== landShown || force) { landShown = ok; document.getElementById('landBtn').hidden = !ok; } }
 function land() { if (!landShown || game.over) return; radioMsg('YOU', 'Bay Bridge traffic, N421AP, clear of the runway.'); game.over = true; addScore(300, 'Arrived at Bay Bridge'); if (game.viol === 0) addScore(200, 'No airspace violations'); setTimeout(showEnd, 700); }
+
+
+// ====================================================================
+//  Air defense: fighter intercepts (AIM 5-6-13) and the DC FRZ SAMs
+// ====================================================================
+// game.fx holds every effect entity. Logic runs in sim time inside step(); the fireball, flares and
+// smoke age in real time inside fxTick(). drawFX() works for both renderers because P() handles altitude.
+const NMPS_JET = 420 / 3600, NMPS_MSL = 900 / 3600;
+const SAM_SITES = [toNM(38.889, -77.028), toNM(38.811, -76.867)];   // stylised sites: the Mall and Andrews
+function newFX() { return { jets: [], missiles: [], flares: [], smoke: [], booms: [], icpt: null, sam: null, squawk: '1200', simBefore: null }; }
+function icptBar(show) { const b = document.getElementById('icptBar'); if (b) b.hidden = !show; }
+function startIntercept(v) {
+  const F = game.fx; if (F.icpt || game.over) return;
+  const out = v.k === 'SFRA' ? null : [(v.bb[0] + v.bb[2]) / 2, (v.bb[1] + v.bb[3]) / 2];
+  const back = (pl.hdg + 180) * D2R, sp = (d, side) => ({ x: pl.x + Math.sin(back) * d + Math.cos(back) * side, y: pl.y - Math.cos(back) * d + Math.sin(back) * side });
+  F.jets = [{ role: 'lead', ...sp(5, -.4), alt: pl.alt + 1500, hdg: pl.hdg, bank: 0 }, { role: 'wing', ...sp(5.4, .4), alt: pl.alt + 1800, hdg: pl.hdg, bank: 0 }];
+  F.icpt = { v, out, state: 'inbound', t: 0, acked: false, guard: false, sq: false, warned: false, followT: 0 };
+  if (F.simBefore == null) { F.simBefore = simRate; if (simRate > 2) { simRate = 2; document.getElementById('bSpeed').textContent = '2×'; } }
+  radioMsg('ATC', `N421AP, Potomac Approach, you have entered ${v.k === 'SFRA' ? 'the Washington SFRA' : v.n} without authorization. Interceptor aircraft are responding.`);
+  flash('INTERCEPTORS INBOUND', '#ff7a6b', 3);
+}
+function escortHdg(I) { if (I.out) return brg(I.out[0], I.out[1], pl.x, pl.y); const sfra = VOL.find(v => v.k === 'SFRA'); return brg((sfra.bb[0] + sfra.bb[2]) / 2, (sfra.bb[1] + sfra.bb[3]) / 2, pl.x, pl.y); }
+function icptAction(k) {
+  const I = game.fx.icpt; if (!I || !['join', 'escort', 'warn'].includes(I.state)) return;
+  if (k === 'rock' && !I.acked) { I.acked = true; pl.rockT = 3; addScore(75, 'Rocked wings to acknowledge'); radioMsg('YOU', '(rocking wings)'); }
+  if (k === 'guard' && !I.guard) { I.guard = true; addScore(50, 'Called the interceptor on 121.5'); radioMsg('YOU', 'Interceptor, N421AP on guard, I see you and will follow.'); radioMsg('ATC', 'N421AP, this is your interceptor. Follow me.'); game.lastFac = 'Guard'; }
+  if (k === 'sq' && !I.sq) { I.sq = true; game.fx.squawk = '7700'; addScore(50, 'Squawked 7700'); }
+  document.getElementById('iRock').classList.toggle('on', I.acked); document.getElementById('i121').classList.toggle('on', I.guard); document.getElementById('i7700').classList.toggle('on', I.sq);
+}
+function launch(from, alt, kind) { game.fx.missiles.push({ x: from.x, y: from.y, alt, hdg: brg(from.x, from.y, pl.x, pl.y), kind, life: 0 }); }
+function startSAM() {
+  const F = game.fx; if (F.sam || game.over) return;
+  const site = SAM_SITES.reduce((b, s) => Math.hypot(s[0] - pl.x, s[1] - pl.y) < Math.hypot(b[0] - pl.x, b[1] - pl.y) ? s : b);
+  F.sam = { site, t: 0 }; radioMsg('ATC', 'N421AP, you are inside the Flight Restricted Zone. Turn immediately…'); flash('SAM LAUNCH DETECTED', '#ff4d3d', 3);
+}
+function fxStep(dt) {
+  const F = game.fx; if (!F) return; const I = F.icpt;
+  // jets fly to their formation slots, offset in the intercepted aircraft's frame
+  const slot = (ahead, right, up) => { const h = pl.hdg * D2R; return { x: pl.x + Math.sin(h) * ahead + Math.cos(h) * right, y: pl.y - Math.cos(h) * ahead + Math.sin(h) * right, alt: pl.alt + up }; };
+  if (I) {
+    I.t += dt; const lead = F.jets[0], wing = F.jets[1];
+    // formation is spread out for readability at map scale (lead ahead and left, wingman trailing right)
+    let sL = slot(.45, -.38, 150), sW = slot(-.55, .45, 300);
+    if (I.state === 'shoot') sW = slot(-1.1, .05, 100);
+    if (I.state === 'release') { sL = { x: lead.x + Math.sin((lead.hdg - 80) * D2R) * 3, y: lead.y - Math.cos((lead.hdg - 80) * D2R) * 3, alt: pl.alt + 4000 }; sW = { x: sL.x + .3, y: sL.y + .3, alt: sL.alt + 200 }; }
+    for (const [j, sl] of [[lead, sL], [wing, sW]]) { const dx = sl.x - j.x, dy = sl.y - j.y, d = Math.hypot(dx, dy), stepD = Math.min(d, (I.state === 'inbound' || I.state === 'release' ? NMPS_JET : NMPS_JET * .6) * dt * (d > .4 ? 1 : .5 + d));
+      if (d > 1e-4) { j.x += dx / d * stepD; j.y += dy / d * stepD; if (d > .05) j.hdg = brg(0, 0, dx, dy); }
+      j.alt += clamp(sl.alt - j.alt, -60 * dt, 60 * dt); }
+    if (I.state === 'inbound' && Math.hypot(lead.x - sL.x, lead.y - sL.y) < .1) { I.state = 'join'; I.t = 0; icptBar(true); radioMsg('ATC', 'N421AP, you have been intercepted. Follow the lead fighter on your left.'); flash('INTERCEPTED: rock wings, call 121.5, squawk 7700, then follow', '#ffcc33', 5); }
+    if (I.state !== 'inbound' && I.state !== 'release') { if (I.state === 'join') { lead.hdg = pl.hdg; lead.bank = 30 * Math.sin(I.t * 5); } else lead.bank = 0; if (wing && I.state !== 'shoot') wing.hdg = pl.hdg; }
+    if (I.state === 'join' && I.t > 7) { I.state = 'escort'; I.t = 0; I.cmd = escortHdg(I); radioMsg('ATC', '(the lead rocks its wings and begins a slow level turn)'); }
+    if (I.state === 'escort' || I.state === 'warn') {
+      lead.hdg = norm(lead.hdg + clamp(angDiff(I.cmd, lead.hdg), -3 * dt, 3 * dt));
+      const following = Math.abs(angDiff(pl.hdg, I.cmd)) < 25 || Math.abs(angDiff(pl.bug, I.cmd)) < 20;   // turning to follow counts
+      I.followT = following ? I.followT + dt : 0;
+      const zoneIn = VOL.some(z => z.grp === I.v.grp && horiz(z, pl.x, pl.y)), clear = !zoneIn && edgeDist(pl.x, pl.y, I.v.r) > 1.5;
+      if (clear && I.acked) { I.state = 'release'; I.t = 0; icptBar(false); addScore(150, 'Followed the interceptor out'); radioMsg('ATC', 'N421AP, you may proceed. Contact Potomac Approach and expect a phone number.'); flash('INTERCEPTOR BREAKS AWAY: YOU MAY PROCEED', '#9df27f', 3.5); }
+      else if (I.state === 'escort' && I.t > 30 && (!I.acked || I.followT < 5)) { I.state = 'warn'; I.t = 0; addScore(-100, 'Ignored the interceptor'); radioMsg('ATC', 'N421AP, FOLLOW THE INTERCEPTOR IMMEDIATELY.'); flash('WARNING FLARES! Rock wings and follow NOW', '#ff7a6b', 4);
+        for (let k = 0; k < 14; k++) F.flares.push({ x: lead.x, y: lead.y, alt: lead.alt, vx: (Math.random() - .5) * .03, vy: (Math.random() - .5) * .03, life: 3 + Math.random() }); }
+      else if (I.state === 'warn' && I.t > 18) { if (I.acked && I.followT > 4) { I.state = 'escort'; I.t = 0; } else { I.state = 'shoot'; I.t = 0; icptBar(false); radioMsg('ATC', 'N421AP, final warning. You are not complying.'); flash('FOX TWO', '#ff4d3d', 2.5); } }
+    }
+    if (I.state === 'shoot' && I.t > 4 && !I.fired) { I.fired = true; launch(wing, wing.alt, 'aam'); setTimeout(() => game.fx && game.fx.icpt === I && launch(wing, wing.alt, 'aam'), 600); }
+    if (I.state === 'release' && I.t > 25) { F.jets = []; F.icpt = null; if (F.simBefore != null) { simRate = F.simBefore; document.getElementById('bSpeed').textContent = simRate + '×'; F.simBefore = null; } }
+  }
+  if (F.sam) { F.sam.t += dt; if (F.sam.t > 2.5 && !F.sam.fired) { F.sam.fired = true; launch({ x: F.sam.site[0], y: F.sam.site[1] }, 100, 'sam'); flash('SAM INBOUND', '#ff4d3d', 2.5); } }
+  // missiles: pure pursuit with a smoke trail
+  for (const m of F.missiles) { if (m.dead) continue; m.life += dt; const dx = pl.x - m.x, dy = pl.y - m.y, d = Math.hypot(dx, dy), stepD = Math.min(d, NMPS_MSL * dt);
+    m.hdg = brg(0, 0, dx, dy); m.x += dx / (d || 1) * stepD; m.y += dy / (d || 1) * stepD; m.alt += clamp(pl.alt - m.alt, -4000 * dt, 4000 * dt);
+    F.smoke.push({ x: m.x, y: m.y, alt: m.alt, life: 2.2 });
+    if (d < .02 && Math.abs(pl.alt - m.alt) < 150) { m.dead = true; shotDown(m.kind); } }
+}
+function shotDown(kind) {
+  if (game.over) return; game.over = true; icptBar(false);
+  game.fx.booms.push({ x: pl.x, y: pl.y, alt: pl.alt, t: 0 }); game.shot = kind; noise();
+  setTimeout(() => showEnd(), 3600);
+}
+function noise() { try { const a = new (window.AudioContext || window.webkitAudioContext)(), n = a.sampleRate * 1.4, b = a.createBuffer(1, n, a.sampleRate), c = b.getChannelData(0); for (let i = 0; i < n; i++) c[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2);
+  const s = a.createBufferSource(); s.buffer = b; const g = a.createGain(); g.gain.value = .35; s.connect(g).connect(a.destination); s.start(); } catch (_) {} }
+function fxTick(rdt) {
+  const F = game && game.fx; if (!F) return;
+  for (const f of F.flares) { f.life -= rdt; f.x += f.vx * rdt; f.y += f.vy * rdt; f.alt -= 300 * rdt; } F.flares = F.flares.filter(f => f.life > 0);
+  for (const s of F.smoke) s.life -= rdt; F.smoke = F.smoke.filter(s => s.life > 0).slice(-400);
+  for (const b of F.booms) b.t += rdt;
+  if (pl && pl.rockT > 0) pl.rockT -= rdt;
+}
+function jetSprite() {
+  ctx.beginPath(); ctx.moveTo(0, -17); ctx.lineTo(2.6, -6); ctx.lineTo(13, 5); ctx.lineTo(13, 8); ctx.lineTo(3, 6); ctx.lineTo(5.5, 13); ctx.lineTo(2, 13); ctx.lineTo(0, 11);
+  ctx.lineTo(-2, 13); ctx.lineTo(-5.5, 13); ctx.lineTo(-3, 6); ctx.lineTo(-13, 8); ctx.lineTo(-13, 5); ctx.lineTo(-2.6, -6); ctx.closePath();
+}
+function drawFX() {
+  const F = game && game.fx; if (!F) return;
+  for (const s of F.smoke) { const [x, y] = P(s.x, s.y, s.alt); ctx.fillStyle = `rgba(235,235,235,${clamp(s.life / 2.2, 0, 1) * .55})`; ctx.beginPath(); ctx.arc(x, y, 3 + (2.2 - s.life) * 4, 0, 6.283); ctx.fill(); }
+  for (const f of F.flares) { const [x, y] = P(f.x, f.y, f.alt); ctx.fillStyle = `rgba(255,${150 + Math.random() * 100 | 0},40,${clamp(f.life, 0, 1)})`; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 6.283); ctx.fill(); }
+  const bear = typeof map !== 'undefined' && map ? map.getBearing() : 0;
+  for (const j of F.jets) { const [x, y] = P(j.x, j.y, j.alt), [gx, gy] = P(j.x, j.y, 0);
+    ctx.save(); ctx.translate(gx + 4, gy + 5); ctx.rotate((j.hdg - bear) * D2R); ctx.fillStyle = 'rgba(0,0,0,.25)'; jetSprite(); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.translate(x, y); ctx.rotate((j.hdg - bear) * D2R); ctx.scale(Math.cos(j.bank * D2R), 1); ctx.fillStyle = '#7b8794'; ctx.strokeStyle = '#1e252b'; ctx.lineWidth = 1.4; jetSprite(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#29425a'; ctx.beginPath(); ctx.ellipse(0, -7, 1.6, 3.4, 0, 0, 6.283); ctx.fill(); ctx.restore(); }
+  for (const m of F.missiles) { if (m.dead) continue; const [x, y] = P(m.x, m.y, m.alt); ctx.save(); ctx.translate(x, y); ctx.rotate((m.hdg - bear) * D2R);
+    ctx.fillStyle = '#f4f4f0'; ctx.fillRect(-1.6, -7, 3.2, 12); ctx.fillStyle = '#d23b2a'; ctx.fillRect(-1.6, -7, 3.2, 3); ctx.fillStyle = '#ffb000'; ctx.beginPath(); ctx.moveTo(-2, 5); ctx.lineTo(0, 10 + Math.random() * 5); ctx.lineTo(2, 5); ctx.fill(); ctx.restore(); }
+  for (const b of F.booms) { const [x, y] = P(b.x, b.y, b.alt), t = b.t;
+    if (t < 1.4) { const r = 10 + t * 70; const gr = ctx.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(255,255,210,${1 - t / 1.4})`); gr.addColorStop(.45, `rgba(255,170,40,${1 - t / 1.6})`); gr.addColorStop(1, 'rgba(200,40,10,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill(); }
+    if (t > .4) { const k = clamp((t - .4) / 2.6, 0, 1), a = clamp(1.4 - (t - .4) / 3.2, 0, 1), top = y - 30 - k * 70, cw = 26 + k * 34;
+      ctx.fillStyle = `rgba(120,110,100,${a})`; ctx.beginPath(); ctx.moveTo(x - 7 - k * 4, y); ctx.quadraticCurveTo(x - 4, top + 20, x - 9, top + 6); ctx.lineTo(x + 9, top + 6); ctx.quadraticCurveTo(x + 4, top + 20, x + 7 + k * 4, y); ctx.fill();
+      for (const [ox, oy, rr, c] of [[0, 0, 1, '150,135,120'], [-.55, .25, .7, '175,160,140'], [.55, .25, .7, '175,160,140'], [0, -.3, .75, '200,180,150']]) { ctx.fillStyle = `rgba(${c},${a})`; ctx.beginPath(); ctx.ellipse(x + ox * cw, top + oy * cw * .6, cw * rr * .55, cw * rr * .38, 0, 0, 6.283); ctx.fill(); }
+      ctx.fillStyle = `rgba(255,140,40,${a * .6})`; ctx.beginPath(); ctx.ellipse(x, top + cw * .15, cw * .5, cw * .18, 0, 0, 6.283); ctx.fill(); } }
+  if (F.squawk === '7700' && !game.over) { ctx.font = 'bold 12px "Courier New", monospace'; const [x, y] = P(pl.x, pl.y, pl.alt); ctx.fillStyle = '#ff4d3d'; ctx.textAlign = 'left'; ctx.fillText('7700', x + 20, y + 22); }
+}
 
 // ====================================================================
 //  Projection & drawing
@@ -582,7 +697,7 @@ function render() {
   if (!cam.chart) { if (cam.hz < .001) { const [a, b] = P(WORLD.x0, WORLD.y0), [c, d] = P(WORLD.x1, WORLD.y1); ctx.save(); ctx.beginPath(); ctx.rect(a, b, c - a, d - b); ctx.clip(); drawChart2D(); drawTowers(false); drawAirports(); ctx.restore(); }
     else { drawLite(); drawAirports(); drawTowers(true); drawVolumes3D(); } }
   else if (cam.hz > .001) drawVolumes3D();
-  drawPlane(); drawHUD();
+  drawPlane(); drawFX(); drawHUD();
 }
 function drawLite() {
   ctx.strokeStyle = 'rgba(168,50,127,.55)'; ctx.lineWidth = 3; ctx.setLineDash([2, 7]); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(...P(START.x, START.y)); ctx.lineTo(...P(DEST.x, DEST.y)); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = 'butt';
@@ -597,7 +712,7 @@ addEventListener('keydown', e => {
   if (keys[e.code]) return; keys[e.code] = true; if (!running || game.over) return;
   if (game.quiz && !game.quiz.done) { const n = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code]; if (n !== undefined) answerQuiz(n); return; }
   if (!document.getElementById('sheet').hidden) { if (e.code === 'Escape' || e.code === 'Enter') closeSheet(); return; }
-  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyN: () => nav && nav.toggle(), KeyG: () => six && document.getElementById('bInst').classList.toggle('on', six.toggle()), KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); }, KeyL: land, Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
+  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyW: () => icptAction('rock'), KeyN: () => nav && nav.toggle(), KeyG: () => six && document.getElementById('bInst').classList.toggle('on', six.toggle()), KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); }, KeyL: land, Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; hold.left = hold.right = false; });
@@ -610,6 +725,7 @@ function togglePause() { paused = !paused; document.getElementById('bPause').tex
 const holdBtn = (id, k) => { const b = document.getElementById(id); const on = e => { e.preventDefault(); hold[k] = true; b.classList.add('on'); }, off = () => { hold[k] = false; b.classList.remove('on'); }; b.addEventListener('pointerdown', on); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, off); };
 holdBtn('bLeft', 'left'); holdBtn('bRight', 'right');
 const tap = (id, f) => document.getElementById(id).addEventListener('click', f);
+tap('iRock', () => icptAction('rock')); tap('i121', () => icptAction('guard')); tap('i7700', () => icptAction('sq'));
 tap('bUp', () => setTgt(500)); tap('bDown', () => setTgt(-500)); tap('bRadio', () => running && !game.over && openRadio()); tap('bView', () => toggleView()); tap('bChart', () => toggleChart());
 tap('bSpeed', cycleSpeed); tap('bZin', () => zoom(1.4)); tap('bZout', () => zoom(1 / 1.4)); tap('bPause', togglePause); tap('bNav', () => { if (nav) document.getElementById('bNav').classList.toggle('on', nav.toggle()); });
 tap('bInst', () => { if (six) document.getElementById('bInst').classList.toggle('on', six.toggle()); }); tap('landBtn', land);
@@ -700,6 +816,7 @@ function frame(now) {
     const frozen = paused || game.over || !document.getElementById('sheet').hidden;
     if (!frozen) { let t = rdt * simRate; while (t > 0) { const d = Math.min(t, .25); step(d); t -= d; } }
     for (const f of flashes) f.life -= rdt; while (flashes.length && flashes[0].life <= 0) flashes.shift();
+    fxTick(rdt);
     const tT = cam.view === '3d' ? .5 : 1, tH = cam.view === '3d' ? cam.s * .0011 + .008 : 0, tY = cam.view === '3d' ? .7 : .5, k = Math.min(1, rdt * 4);
     cam.T += (tT - cam.T) * k; cam.hz += (tH - cam.hz) * k; cam.yc += (tY - cam.yc) * k; if (cam.view === '2d' && cam.hz < .00005) cam.hz = 0;
     if (now - cam.lastPan > 5000) { cam.px *= 1 - Math.min(1, rdt * 2); cam.py *= 1 - Math.min(1, rdt * 2); }
@@ -715,7 +832,9 @@ function frame(now) {
 function showEnd() {
   const sc = Math.round(game.score), grade = sc >= 1400 ? 'A' : sc >= 1000 ? 'B' : sc >= 650 ? 'C' : sc >= 300 ? 'D' : 'F';
   const rows = game.log.map(l => `<tr><td>${l.label}</td><td class="pts ${l.pts >= 0 ? 'pos' : 'neg'}">${l.pts > 0 ? '+' : ''}${l.pts}</td></tr>`).join('');
-  document.getElementById('endCard').innerHTML = `<div class="grade">${grade}</div><h1>Arrived at Bay Bridge</h1>
+  const shot = game.shot, why = shot === 'sam' ? 'A surface-to-air missile got you inside the DC Flight Restricted Zone.' : shot ? 'You ignored the interceptor, so the wingman fired.' : '';
+  const lesson = shot ? `<p class="why" style="border-left:4px solid var(--amber);padding:6px 10px;background:rgba(255,204,51,.08)"><b>If you're ever intercepted (AIM 5-6-13):</b> rock your wings to acknowledge, call on 121.5, squawk 7700 unless ATC says otherwise, and follow the interceptor's instructions. A slow level turn means "follow me". A breakaway climbing turn means "you may proceed". ${shot === 'sam' ? 'The FRZ (roughly 15 NM around DCA) is closed to almost all VFR traffic, so stay well clear.' : ''}</p>` : '';
+  document.getElementById('endCard').innerHTML = `<div class="grade">${shot ? '✕' : grade}</div><h1>${shot ? 'Shot down' : 'Arrived at Bay Bridge'}</h1>${shot ? `<p>${why}</p>${lesson}` : ''}
     <h2>${game.correct} of ${game.quizzes} checkride questions · ${game.viol} airspace violation${game.viol === 1 ? '' : 's'} · ${Math.floor(game.t / 60)} min flight</h2>
     <table>${rows}<tr><td><b>Total</b></td><td class="pts"><b>${sc}</b></td></tr></table>
     <p class="fine">Each flight rolls new conditions. Restricted areas scheduled "by NOTAM" may be hot or cold, and Potomac Approach won't always clear you into the Bravo.</p>
