@@ -26,16 +26,6 @@
   .readout .tgt { font-size:11px; color:var(--amber); white-space:nowrap; }
   #ctl .row2 { display:grid; grid-template-columns:repeat(9, minmax(0,1fr)); gap:5px; max-width:660px; width:100%; margin:0 auto; }
   #ctl .row2 button { min-height:40px; font-size:12px; }
-  #opsCard { max-width:660px; width:100%; margin:0 auto; box-sizing:border-box; background:var(--panel); border:2px solid var(--amber); padding:8px 10px; }
-  #opsCard .oc-t { font:900 15px var(--display); letter-spacing:1px; color:var(--amber); text-transform:uppercase; }
-  #opsCard .oc-x { font-size:13px; line-height:1.35; color:var(--ink); margin-top:2px; }
-  #opsCard .oc-b { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
-  #opsCard .oc-b button { flex:1; min-height:42px; font:900 14px var(--display); letter-spacing:1px; }
-  #opsCard .oc-b button.hi { background:var(--amber); color:#111; }
-  #ctl.auto .row1 { opacity:.4; pointer-events:none; }
-  .sheet .atc { font-family:var(--mono); font-size:14px; color:#9df27f; background:#0b0f13; border:1px solid #2a343c; padding:8px 10px; line-height:1.45; }
-  .sheet .opts.freqs { grid-template-columns:repeat(auto-fit, minmax(90px, 1fr)); }
-  .sheet .opts.freqs button { text-align:center; font:bold 17px var(--mono); }
   #landBtn { max-width:660px; width:100%; margin:0 auto; font:900 18px var(--display); letter-spacing:1px; background:var(--good); color:#111; min-height:46px; }
   .sheet { position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; justify-content:center; padding:0 12px calc(12px + env(safe-area-inset-bottom, 0px)); }
   .sheet .card { width:100%; max-width:560px; background:#141a1f; border:3px solid var(--amber); box-shadow:0 0 0 4px #000, 0 -10px 40px rgba(0,0,0,.6);
@@ -74,7 +64,6 @@
 
 <canvas id="c" aria-label="Sectional chart map"></canvas>
 <div id="ctl">
-  <div id="opsCard" hidden></div>
   <button id="landBtn" type="button" hidden>LAND AT BAY BRIDGE</button>
   <div class="row1">
     <div class="grp" aria-label="Heading">
@@ -107,16 +96,17 @@
 <div id="title" class="overlay">
   <div class="card">
     <h1>Sectional Run</h1>
-    <h2>Frederick (FDK) · ramp to ramp · real airspace</h2>
-    <p>You're parked on the <b>AOPA ramp</b> at <b>Frederick Muni</b> in <b>N421AP</b>, engine running. Get the <b>ATIS</b>, call <b>Ground</b> for taxi, then <b>Tower</b> for takeoff. Stay in the pattern for a full-stop landing back at the ramp, or depart east for <b>Bay Bridge</b> (W29) on Kent Island. On the ground and in the pattern the plane flies itself: you make the decisions and the radio calls. En route it holds 110 knots, and you steer and pick altitudes.</p>
+    <h2>Frederick (FDK) → Bay Bridge (W29) · real airspace</h2>
+    <p>You've just departed <b>Frederick Muni</b> in <b>N421AP</b>, headed for <b>Bay Bridge</b> on Kent Island. The plane holds 110 knots on its own, so you only steer and pick altitudes. Nothing stalls and nothing crashes. The challenge is reading the chart. The direct line runs straight through the Washington DC SFRA, so you'll need to plan around it, slip under the Baltimore Bravo shelves, and answer checkride questions along the way.</p>
     <div class="notam" id="briefNotam"></div>
     <ul>
-      <li>The <b>card above the controls</b> tells you what's happening and what you can do next. Radio calls are multiple choice: tune the right frequency, then pick the right call</li>
       <li><b>◀ ▶</b> (hold) set the heading bug, and the plane turns to it at standard rate · <b>▲ ▼</b> change target altitude by 500 ft</li>
-      <li><b>RADIO</b> en route: call Potomac Approach, a tower, or self-announce on the CTAF · <b>AIR</b> hides the airspace drawing (the rules still apply)</li>
+      <li><b>INST</b> shows draggable flight instruments, as a six-pack or a <b>GLASS</b> EADI and EHSI (switch in the panel's top bar). Turn its <b>HDG knob</b> to set the bug, or tap the knob to sync it to your heading</li>
+      <li><b>RADIO</b> call Potomac Approach, a tower, or self-announce on the CTAF</li>
       <li><b>3D</b> shows the airspace as stacked slabs · <b>TAC</b> swaps in the real FAA chart</li>
-      <li>Pinch or <b>− +</b> to zoom · drag to look around · the <b>windsock</b> by each runway and the corner wind arrow show today's wind</li>
-      <li>Keyboard: ← → heading bug, ↑ ↓ altitude, R radio, V 3D, C chart, A airspace, X speed, Q questions on/off, P pause, L land</li>
+      <li>Tap anything on the map to find out what it is · pinch or <b>− +</b> to zoom · drag to look around</li>
+      <li><b>NAV</b> opens the touchscreen navigator: GS, TRK, DIS and DTK, a moving map, the flight plan, nearest airports and Direct-To</li>
+      <li>Keyboard: ← → heading bug, ↑ ↓ altitude, R radio, V 3D, C chart, X speed, N navigator, Q questions on/off, P pause, L land</li>
     </ul>
     <label class="opt"><input type="checkbox" id="optQuiz" checked> Ask checkride questions along the way</label>
     <button class="go" id="startBtn" type="button" disabled>Loading chart…</button>
@@ -274,16 +264,16 @@ function newGame() {
   for (const v of VOL) if (v.k === 'R') SUA_STATUS[v.grp] = /CONT|0000-2400/i.test(v.tou) ? true : (SUA_STATUS[v.grp] ?? Math.random() < .6);
   game = { t: 0, score: 0, log: [], over: false, inside: {}, contact: { 'D:FDK': true }, clrB: null, asked: {}, quiz: null, correct: 0, quizzes: 0, levelT: 0,
     hemiSegs: {}, towerHits: {}, cityHit: false, ctaf: false, viol: 0, radioLog: [], warned: {}, seenUnder: null };
+  game.radioLog.push({ who: 'TWR', text: 'N421AP, Frederick Tower, departure approved, frequency change approved when clear of the Delta.', t: 0 });
   game.nav = { plan: [START.id, DEST.id], wpt: DEST.id, origin: [START.x, START.y], direct: false }; game.lastFac = 'Frederick Tower';
   cam.cx = pl.x; cam.cy = pl.y; cam.px = cam.py = 0; cam.s = clamp(Math.min(W, H) / 18, 14, 40);
-  document.getElementById('briefNotam').innerHTML = briefing(); updateLand(true); opsReset();
+  document.getElementById('briefNotam').innerHTML = briefing(); updateLand(true);
 }
 function rStatusLine() { const seen = new Set(); return VOL.filter(v => v.k === 'R' && !seen.has(v.grp) && seen.add(v.grp)).map(v => `${v.grp.slice(2)} ${SUA_STATUS[v.grp] ? '<b>HOT</b>' : 'COLD'}`).join(' · '); }
 function briefing() {
   const crs = hdg3(brg(START.x, START.y, DEST.x, DEST.y) + VAR), dist = Math.hypot(DEST.x - START.x, DEST.y - START.y).toFixed(0);
-  return `ROUTE FDK → W29 · DIRECT ${crs}° MAG · ${dist} NM · VAR ${VAR}°W<br>WX: VFR, CLEAR, VIS 10SM, WIND ${windMag(WIND)}<br>SUA TODAY: ${rStatusLine()}<br>NO SFRA FLIGHT PLAN FILED · STAY OUT OF THE DC SFRA`;
+  return `ROUTE FDK → W29 · DIRECT ${crs}° MAG · ${dist} NM · VAR ${VAR}°W<br>WX: VFR, CLEAR, VIS 10SM, WIND CALM<br>SUA TODAY: ${rStatusLine()}<br>NO SFRA FLIGHT PLAN FILED · STAY OUT OF THE DC SFRA`;
 }
-/*__AIRPORT_OPS__*/
 const flashes = [];
 function flash(text, color = '#ffcc33', life = 2.8) { flashes.push({ text, color, life, max: life }); if (flashes.length > 4) flashes.shift(); }
 function addScore(pts, label) { game.score += pts; game.log.push({ label, pts }); flash((pts > 0 ? '+' : '') + pts + '  ' + label, pts >= 0 ? '#9df27f' : '#ff7a6b'); }
@@ -349,7 +339,7 @@ function hemiQuiz() {
     why: `Above 3,000 ft AGL, VFR cruising altitudes follow magnetic course. 000°–179° use odd thousands plus 500, and 180°–359° use even thousands plus 500. Under the Bravo shelves you'll often be lower than 3,000 AGL, where the rule doesn't apply.` };
 }
 function checkQuizzes() {
-  if (game.quiz || !running || !quizOn || opsBusy()) return;
+  if (game.quiz || !running || !quizOn) return;
   for (const q of QUIZ) if (!game.asked[q.id] && q.when()) return openQuiz(q);
   if (!game.asked.hemi && game.levelT > 25 && pl.alt - elev(pl.x, pl.y) > 3000) openQuiz(hemiQuiz());
 }
@@ -409,7 +399,6 @@ function call(g) {
 // ====================================================================
 function step(dt) {
   game.t += dt;
-  if (OPS.auto) { opsStep(dt); game.levelT = 0; rules(); return; }   // airport phases: the plane flies itself
   // fly the heading bug: standard-rate turn (3°/s), easing in over the last few degrees
   const e = angDiff(pl.bug, pl.hdg), trate = Math.sign(e) * Math.min(3, Math.abs(e) * 1.2);
   pl.rate = Math.abs(e) < .05 ? 0 : trate; pl.hdg = norm(pl.hdg + pl.rate * dt); const turn = pl.rate;
@@ -420,7 +409,7 @@ function step(dt) {
   pl.x = clamp(pl.x + Math.sin(pl.hdg * D2R) * NMPS * dt, WORLD.x0 + 1, WORLD.x1 - 1); pl.y = clamp(pl.y - Math.cos(pl.hdg * D2R) * NMPS * dt, WORLD.y0 + 1, WORLD.y1 - 1);
   pl.patt += clamp((pl.vs > 0 ? 6 : pl.vs < 0 ? -2.5 : 2) - pl.patt, -3 * dt, 3 * dt);   // attitude for the instruments
   game.levelT = (pl.vs === 0 && Math.abs(turn) < .05) ? game.levelT + dt : 0;
-  opsFreeTick(); rules();
+  rules();
 }
 function rules() {
   const now = {};
@@ -595,7 +584,7 @@ function airspaceNow() {
 function drawWindsocks() {
   const now = performance.now() / 1000;
   for (const a of AIRPORTS) {
-    const [sx, sy] = a.sock || [a.x + .22, a.y - .18], [bx, by] = P(sx, sy); if (bx < -40 || bx > W + 40 || by < -60 || by > H + 40) continue;
+    const sx = a.x + .22, sy = a.y - .18, [bx, by] = P(sx, sy); if (bx < -40 || bx > W + 40 || by < -60 || by > H + 40) continue;
     const [ex, ey] = P(sx + 1, sy), k = Math.hypot(ex - bx, ey - by); if (k < 45) continue;   // px per NM
     const w = windAt(sx, sy), to = (w.dir + 180) * D2R, [tx, ty] = P(sx + Math.sin(to) * .1, sy - Math.cos(to) * .1);
     const vx = tx - bx, vy = ty - by, vl = Math.hypot(vx, vy) || 1, fsh = clamp(vl / (k * .1), .15, 1), ux = vx / vl, uy = vy / vl;
@@ -651,8 +640,8 @@ function drawHUD() {
 }
 function render() {
   drawBase();
-  if (!cam.chart) { if (cam.hz < .001) { const [a, b] = P(WORLD.x0, WORLD.y0), [c, d] = P(WORLD.x1, WORLD.y1); ctx.save(); ctx.beginPath(); ctx.rect(a, b, c - a, d - b); ctx.clip(); drawChart2D(); drawTowers(false); drawAirports(); drawField(); ctx.restore(); }
-    else { drawLite(); drawAirports(); drawField(); drawTowers(true); drawVolumes3D(); } }
+  if (!cam.chart) { if (cam.hz < .001) { const [a, b] = P(WORLD.x0, WORLD.y0), [c, d] = P(WORLD.x1, WORLD.y1); ctx.save(); ctx.beginPath(); ctx.rect(a, b, c - a, d - b); ctx.clip(); drawChart2D(); drawTowers(false); drawAirports(); ctx.restore(); }
+    else { drawLite(); drawAirports(); drawTowers(true); drawVolumes3D(); } }
   else if (cam.hz > .001) drawVolumes3D();
   drawPlane(); drawHUD();
 }
@@ -673,7 +662,7 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; hold.left = hold.right = false; });
-function setTgt(d) { if (OPS.auto) return; pl.tgt = clamp(pl.tgt + d, 1000, 12500); }
+function setTgt(d) { pl.tgt = clamp(pl.tgt + d, 1000, 12500); }
 function zoom(f) { cam.s = clamp(cam.s * f, 5, 160); }
 function toggleView() { cam.view = cam.view === '2d' ? '3d' : '2d'; document.getElementById('bView').textContent = cam.view === '2d' ? '3D' : '2D'; }
 function toggleChart() { cam.chart = !cam.chart; document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; }
@@ -688,7 +677,7 @@ tap('bAir', () => { setAir(!airOn); flash(airOn ? 'Airspace shown' : 'Airspace h
 tap('bInst', () => { if (six) document.getElementById('bInst').classList.toggle('on', six.toggle()); }); tap('landBtn', land);
 document.getElementById('sheetCard').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.opt !== undefined) answerQuiz(+t.dataset.opt); else if (t.dataset.call) call(t.dataset.call); else if (t.hasAttribute('data-close')) closeSheet(); });
 function showSheet(on) { document.getElementById('sheet').hidden = !on; }
-function closeSheet() { if (game.call) return; showSheet(false); if (game.quiz && game.quiz.done) game.quiz = null; }
+function closeSheet() { showSheet(false); if (game.quiz && game.quiz.done) game.quiz = null; }
 const ptrs = new Map(); let gest = null;
 cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: performance.now() }); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; gest = { d: Math.hypot(a.x - b.x, a.y - b.y), s: cam.s }; } });
 cv.addEventListener('pointermove', e => { const p = ptrs.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
@@ -785,7 +774,7 @@ function frame(now) {
     if (now - cam.lastPan > 5000) { cam.px *= 1 - Math.min(1, rdt * 2); cam.py *= 1 - Math.min(1, rdt * 2); }
     cam.cx = pl.x + cam.px; cam.cy = pl.y + cam.py;
     const slew = (hold.right || keys.ArrowRight ? 1 : 0) - (hold.left || keys.ArrowLeft ? 1 : 0);   // ◀ ▶ and ← → turn the heading bug
-    if (slew && !game.over && !OPS.auto) pl.bug = norm(pl.bug + slew * 45 * rdt);
+    if (slew && !game.over) pl.bug = norm(pl.bug + slew * 45 * rdt);
     rHdg.textContent = hdg3(pl.hdg + VAR) + '°'; rAlt.textContent = fmt(pl.alt); rTgt.textContent = pl.tgt !== Math.round(pl.alt) ? '→ ' + fmt(pl.tgt) : 'LEVEL'; rCrs.textContent = 'BUG ' + hdg3(pl.bug + VAR) + '°';
   }
   if (game && base) render();
@@ -793,10 +782,10 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 function showEnd() {
-  const sc = Math.round(game.score), gs = game.grades || [1400, 1000, 650, 300], grade = sc >= gs[0] ? 'A' : sc >= gs[1] ? 'B' : sc >= gs[2] ? 'C' : sc >= gs[3] ? 'D' : 'F';
+  const sc = Math.round(game.score), grade = sc >= 1400 ? 'A' : sc >= 1000 ? 'B' : sc >= 650 ? 'C' : sc >= 300 ? 'D' : 'F';
   const rows = game.log.map(l => `<tr><td>${l.label}</td><td class="pts ${l.pts >= 0 ? 'pos' : 'neg'}">${l.pts > 0 ? '+' : ''}${l.pts}</td></tr>`).join('');
-  document.getElementById('endCard').innerHTML = `<div class="grade">${grade}</div><h1>${game.endTitle || 'Arrived at Bay Bridge'}</h1>
-    <h2>${game.calls ? `${game.callsOk} of ${game.calls} radio calls right first time · ` : ''}${game.quizzes ? `${game.correct} of ${game.quizzes} checkride questions · ` : ''}${game.viol} airspace violation${game.viol === 1 ? '' : 's'} · ${Math.floor(game.t / 60)} min flight</h2>
+  document.getElementById('endCard').innerHTML = `<div class="grade">${grade}</div><h1>Arrived at Bay Bridge</h1>
+    <h2>${game.correct} of ${game.quizzes} checkride questions · ${game.viol} airspace violation${game.viol === 1 ? '' : 's'} · ${Math.floor(game.t / 60)} min flight</h2>
     <table>${rows}<tr><td><b>Total</b></td><td class="pts"><b>${sc}</b></td></tr></table>
     <p class="fine">Each flight rolls new conditions. Restricted areas scheduled "by NOTAM" may be hot or cold, and Potomac Approach won't always clear you into the Bravo.</p>
     <button class="go" type="button" id="againBtn">Fly it again</button>`;

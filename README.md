@@ -92,37 +92,6 @@ instruments, tap-for-info and live traffic. Set one to `true` and rebuild to bri
 The **AIR** button (or the A key) shows and hides the airspace drawing. The airspace rules always apply, hidden
 or not.
 
-## Airport operations at KFDK (src/airport_ops.js)
-
-Each flight starts parked on the AOPA ramp at Frederick with the engine running. On the ground and in the
-traffic pattern the plane flies itself, and you make the decisions and the radio calls:
-
-1. **ATIS (124.875):** a generated broadcast with an information letter, the session's wind, the altimeter and
-   the runway in use. Tower picks 5 or 23 for the best headwind, and 23 when the wind is calm.
-2. **Ground (127.425):** request taxi for closed traffic or a VFR departure east. Read back the runway and route.
-   Taxiing to 5 includes an explicit "cross runway 5/23" that you must read back.
-3. **Taxi** along Echo (and Alpha for runway 5) to the hold-short line, then do the run-up.
-4. **Tower (132.4):** "ready for departure", then read back the takeoff clearance.
-5. **Takeoff,** then either:
-   - **Closed traffic:** fly the pattern. Runway 23 has left traffic and runway 5 right traffic, at a pattern
-     altitude of 1,300 ft. Tower clears you to land on downwind, and you read it back.
-   - **East departure:** at 700 ft above the field, the plane turns on course for Bay Bridge and hands control
-     back. Tower approves a frequency change once you're clear of the Delta.
-6. **Coming back to Frederick:** within about 9 NM, the card offers the Tower call ("inbound for landing"). Tower
-   gives a pattern entry, and the plane flies the 45° entry. Report midfield to get the landing clearance.
-7. **Landing,** roll-out, the exit Tower gives you, Ground, taxi to the P spot, and shut down.
-
-Every call has two steps: tune the frequency, then choose what to say. Points:
-- **Wrong frequency:** −15.
-- **Wrong call or readback:** −25, with an explanation of what was missing.
-- **Right first time:** +25.
-- **Flight events:** penalties for calling without the ATIS, landing without a clearance, and a tailwind landing.
-
-The ATIS and Ground frequencies come from the TAC's tower frequency table (the FAA data has only the ATIS for
-FDK). The field layout is the stylized KFDK from the first version of this game, traced from the airport diagram
-and placed on the FAA geometry for runway 5/23. Runway 12/30 isn't used yet, because that layout doesn't match the
-FAA position for it.
-
 ## Wind
 
 Wind is random for each session (each page load) and the same everywhere for now. It's usually light to
