@@ -300,7 +300,10 @@ function briefing() {
 const flashes = [];
 function flash(text, color = '#9CC9FF', life = 2.8) { flashes.push({ text, color, life, max: life }); if (flashes.length > 4) flashes.shift(); }
 function addScore(pts, label) { game.score += pts; game.log.push({ label, pts }); flash((pts > 0 ? '+' : '') + pts + '  ' + label, pts >= 0 ? '#71CF88' : '#F84C55'); }
-function radioMsg(who, text) { game.radioLog.push({ who, text, t: game.t }); if (game.radioLog.length > 14) game.radioLog.shift(); }
+// The latest radio call stays up for 25 s of game time, and never less than a real reading time (6-14 s by length),
+// so it can be read at 16x.
+const msgShown = m => !!m && (game.t - m.t < 25 || performance.now() - (m.rt ?? -1e9) < clamp(m.text.length * 70, 6000, 14000));
+function radioMsg(who, text) { game.radioLog.push({ who, text, t: game.t, rt: performance.now() }); if (game.radioLog.length > 14) game.radioLog.shift(); }
 const d2 = a => Math.hypot(pl.x - a.x, pl.y - a.y);
 const grpVols = g => VOL.filter(v => v.grp === g);
 const nearGrp = g => Math.min(...grpVols(g).map(v => volDist(v, pl.x, pl.y)));
@@ -671,9 +674,9 @@ function drawHUD() {
   txt(aT, x + 14, y + 22, aF, as.bad ? '#F84C55' : '#ffffff');
   txt(as.note, x + 14, y + 42, `12px ${UIF}`, '#b5b5b5');
   txt(`W29 ${d2(DEST).toFixed(0)} NM · ${hdg3(brg(pl.x, pl.y, DEST.x, DEST.y) + VAR)}°`, x + w - 12, y + 42, `bold 12px ${UIF}`, '#9CC9FF', 'right');
-  const m = game.radioLog[game.radioLog.length - 1];
-  if (m && game.t - m.t < 25) { ctx.font = `13px ${UIF}`; const L = wrapT(`${m.who}: ${m.text}`, w - 24); panel(x, y + PH + 6, w, 12 + L.length * 15); L.forEach((l, i) => txt(l, x + 12, y + PH + 23 + i * 15, `13px ${UIF}`, m.who === 'YOU' ? '#9CC9FF' : '#71CF88')); }
-  { const rp = m && game.t - m.t < 25, my = narrow ? y + PH + (rp ? 12 + wrapT(`${m.who}: ${m.text}`, w - 20).length * 15 + 6 : 0) + 44 : (cam.chart ? 40 : 12) + 36;
+  const m = game.radioLog[game.radioLog.length - 1], rp = msgShown(m);
+  if (rp) { ctx.font = `13px ${UIF}`; const L = wrapT(`${m.who}: ${m.text}`, w - 24); panel(x, y + PH + 6, w, 12 + L.length * 15); L.forEach((l, i) => txt(l, x + 12, y + PH + 23 + i * 15, `13px ${UIF}`, m.who === 'YOU' ? '#9CC9FF' : '#71CF88')); }
+  { const my = narrow ? y + PH + (rp ? 12 + wrapT(`${m.who}: ${m.text}`, w - 20).length * 15 + 6 : 0) + 44 : (cam.chart ? 40 : 12) + 36;
     drawWindWidget(W - 12 - 36, my); }
   let fy = Math.max(H * .3, 200);
   for (const f of flashes) {   // snackbar-style chips with a status-coloured edge
