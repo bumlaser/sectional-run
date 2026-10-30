@@ -9,7 +9,7 @@ if os.path.exists('data/derived/dem.json'): _w['dem'] = json.load(open('data/der
 w = json.dumps(_w, separators=(',', ':'))
 tac = 'data:image/jpeg;base64,' + base64.b64encode(open('data/derived/tac_warp.jpg', 'rb').read()).decode()
 fill = lambda s: s.replace('__WORLD__', w, 1).replace("'__TAC__'", "'" + tac + "'", 1)
-NAVJS = ''.join('<script>\n' + open(f).read() + '</script>\n' for f in ('src/nav_panel.js', 'src/sixpack_assets.js', 'src/six_pack.js'))
+NAVJS = ''.join('<script>\n' + open(f).read() + '</script>\n' for f in ('src/nav_panel.js', 'src/sixpack_assets.js', 'src/six_pack.js', 'src/gauge_strip.js'))
 src = src.replace('<script>\n\'use strict\';\nconst WD', NAVJS + '<script>\n\'use strict\';\nconst WD', 1)
 assert NAVJS in src, 'nav panel not inserted'
 head = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'
@@ -41,14 +41,6 @@ function mapReadyHook() { enableStart(); }
 i = m.rindex('</script>\n') + len('</script>\n')   # after the game's own script
 m = m[:i] + '<script>\n' + layer + '</script>\n' + m[i:]
 os.makedirs('3d', exist_ok=True); open('3d/index.html', 'w').write(head + fill(m) + '</html>\n')
-# 3d/index2.html: experimental variant with the six steam gauges in one row along the top of the flight controls
-m2 = patch(m, '<title>Sectional Run 3D</title>', '<title>Sectional Run 3D · gauges</title>')
-m2 = patch(m2, '<div id="ctl">\n', '<div id="ctl">\n  <div id="gstrip" aria-label="Flight instruments"></div>\n')
-i = m2.rindex('</script>\n') + len('</script>\n')
-m2 = m2[:i] + '<script>\n' + open('src/gauge_strip.js').read() + """
-const gstrip = new GaugeStrip(document.getElementById('gstrip'));
-sixTick = (orig => function () { orig(); if (!pl || !game) return;
-  gstrip.update({ ias: TAS, pitch: pl.patt, roll: pl.bank, alt: pl.alt, baro: 29.92, turn: pl.rate, slip: 0, hdg: norm(pl.hdg + VAR), bug: norm(pl.bug + VAR), vs: pl.vs * 60 }); })(sixTick);
-</script>\n""" + m2[i:]
-open('3d/index2.html', 'w').write(head + fill(m2) + '</html>\n')
+# 3d/index2.html was the gauge-row experiment; the gauges are now a setting on the main page
+open('3d/index2.html', 'w').write('<!doctype html><meta charset="utf-8"><title>Sectional Run</title><meta http-equiv="refresh" content="0; url=./"><a href="./">Sectional Run</a>\n')
 print('index.html', os.path.getsize('index.html') // 1024, 'KB · 3d/index.html', os.path.getsize('3d/index.html') // 1024, 'KB · 3d/index2.html', os.path.getsize('3d/index2.html') // 1024, 'KB')

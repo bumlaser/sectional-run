@@ -85,6 +85,7 @@
 
 <canvas id="c" aria-label="Sectional chart map"></canvas>
 <div id="ctl">
+  <div id="gstrip" aria-label="Flight instruments" hidden></div>
   <button id="landBtn" type="button" hidden>LAND AT BAY BRIDGE</button>
   <div class="row1">
     <div class="grp" aria-label="Heading">
@@ -725,6 +726,7 @@ function openSettings() {
     ${row('Checkride questions', quizOn ? 'Questions pop up at chart features' : 'Free flight, no questions', sw('quiz', quizOn))}
     ${row('Airspace', airOn ? 'Shown. The rules always apply' : 'Hidden. The rules still apply', sw('air', airOn))}
     ${typeof terrainOn !== 'undefined' && typeof setTerrainOn === 'function' ? row('3D terrain', 'Hills and valleys from elevation data', sw('terrain', terrainOn)) : ''}
+    ${row('Gauges', 'Six steam gauges along the top of the controls', sw('gauges', gaugesOn))}
     ${nav ? row('Navigator', 'The panel-mount GPS unit (also the NAV button)', sw('nav', nav.visible)) : ''}
     ${row('Sim speed', 'How fast time passes', `<div class="seg">${speeds}</div>`)}
     ${row('Camera', `Current view: ${viewName()}`, '<button type="button" class="set-btn" data-set="view">Change</button>')}
@@ -736,7 +738,7 @@ document.getElementById('settings').addEventListener('click', e => {
   if (e.target.id === 'settings') return void (document.getElementById('settings').hidden = true);   // tap outside the card
   const b = e.target.closest('[data-set]'); if (!b) return; const k = b.dataset.set;
   if (k === 'close') return void (document.getElementById('settings').hidden = true);
-  if (k === 'quiz') setQuiz(!quizOn); else if (k === 'air') setAir(!airOn); else if (k === 'terrain') setTerrainOn(!terrainOn);
+  if (k === 'quiz') setQuiz(!quizOn); else if (k === 'air') setAir(!airOn); else if (k === 'terrain') setTerrainOn(!terrainOn); else if (k === 'gauges') setGauges(!gaugesOn);
   else if (k === 'nav' && nav) document.getElementById('bNav').classList.toggle('on', nav.toggle());
   else if (k === 'speed') { simRate = +b.dataset.v; document.getElementById('bSpeed').textContent = simRate + '×'; }
   else if (k === 'view') toggleView();
@@ -827,7 +829,15 @@ function initSix() {
     document.getElementById('bInst').classList.toggle('on', six.visible);
   } else document.getElementById('bInst').hidden = true;
 }
+// Gauge row along the top of the flight controls (Settings → Gauges, off by default)
+let gaugesOn = false, gstrip = null; try { gaugesOn = localStorage.getItem('sr.gauges') === '1'; } catch (_) {}
+function setGauges(on) {
+  gaugesOn = on; try { localStorage.setItem('sr.gauges', on ? '1' : '0'); } catch (_) {}
+  const el = document.getElementById('gstrip'); if (on && !gstrip && typeof GaugeStrip !== 'undefined') gstrip = new GaugeStrip(el); el.hidden = !on;
+}
+setGauges(gaugesOn);
 function sixTick() {
+  if (gaugesOn && gstrip && pl) gstrip.update({ ias: TAS, pitch: pl.patt, roll: pl.bank, alt: pl.alt, baro: 29.92, turn: pl.rate, slip: 0, hdg: norm(pl.hdg + VAR), bug: norm(pl.bug + VAR), vs: pl.vs * 60 });
   if (!six || !pl || !game || !game.nav || !six.visible) return;
   const N = game.nav, wp = ANY(N.wpt) || DEST, o = N.origin, crs = brg(o[0], o[1], wp.x, wp.y);
   const fromO = Math.hypot(pl.x - o[0], pl.y - o[1]), xtk = fromO * Math.sin((brg(o[0], o[1], pl.x, pl.y) - crs) * D2R);   // + = right of course
