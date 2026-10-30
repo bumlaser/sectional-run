@@ -151,8 +151,12 @@ function planeGeom(lon, lat, span) {
   const c = Math.cos(pl.hdg * D2R), s = Math.sin(pl.hdg * D2R);
   return PLANE_SHAPE.map(r => { const ring = r.map(([x, y]) => metersLL(lon, lat, (x * c - y * s) * span, (x * s + y * c) * span)); ring.push(ring[0]); return ring; });
 }
+// Fill-extrusions on terrain are lifted by the rendered (exaggerated) terrain height at their centroid, so a shape at a
+// fixed altitude needs that exact height taken off. Our own DEM grid differs from the rendered tiles and made the plane bob.
+const terrainM = (lon, lat) => map.terrain ? map.terrain.getElevationForLngLatZoom(new maplibregl.LngLat(lon, lat), map.transform.tileZoom) : 0;
+const altH = (lon, lat, altFt) => altFt * FT * EX - terrainM(lon, lat);
 function updatePlane() {
-  const [lon, lat] = toLL(pl.x, pl.y), z = map.getZoom(), span = clamp(36 * Math.pow(2, 16.1 - z) * (viewMode === 0 ? .5 : 1), 50, 9000), gnd = map.getTerrain() ? elev(pl.x, pl.y) : 0, h = Math.max(30, (pl.alt - gnd) * FT * EX);
+  const [lon, lat] = toLL(pl.x, pl.y), z = map.getZoom(), span = clamp(36 * Math.pow(2, 16.1 - z) * (viewMode === 0 ? .5 : 1), 50, 9000), h = Math.max(30, altH(lon, lat, pl.alt));
   map.getSource('plane').setData(fc([{ type: 'Feature', properties: { col: '#ff6a13', b: h, h: h + span * .12 }, geometry: { type: 'Polygon', coordinates: planeGeom(lon, lat, span) } }]));
   const sq = span * .03, fx = [{ type: 'Feature', properties: { p: 'shadow' }, geometry: { type: 'Polygon', coordinates: planeGeom(lon, lat, span) } }];
   const ring = (rad) => Array.from({ length: 33 }, (_, i) => metersLL(lon, lat, Math.cos(i / 32 * 6.283) * rad, Math.sin(i / 32 * 6.283) * rad));
@@ -161,7 +165,8 @@ function updatePlane() {
   const ahead = [pl.x + Math.sin(pl.hdg * D2R) * 4, pl.y - Math.cos(pl.hdg * D2R) * 4], [al, aa] = toLL(...ahead), steps = 12, w = span * .015;
   for (let i = 0; i < steps; i += 2) { const f0 = i / steps, f1 = (i + 1) / steps, la = lon + (al - lon) * f0, lb = lon + (al - lon) * f1, ta = lat + (aa - lat) * f0, tb = lat + (aa - lat) * f1;
     const nx = -Math.cos(pl.hdg * D2R) * w, ny = -Math.sin(pl.hdg * D2R) * w;
-    fx.push({ type: 'Feature', properties: { p: 'hdg', col: '#22e04a', b: h, h: h + w * 2 }, geometry: { type: 'Polygon', coordinates: [[metersLL(la, ta, nx, ny), metersLL(lb, tb, nx, ny), metersLL(lb, tb, -nx, -ny), metersLL(la, ta, -nx, -ny), metersLL(la, ta, nx, ny)]] } }); }
+    const hs = Math.max(30, altH((la + lb) / 2, (ta + tb) / 2, pl.alt));
+    fx.push({ type: 'Feature', properties: { p: 'hdg', col: '#22e04a', b: hs, h: hs + w * 2 }, geometry: { type: 'Polygon', coordinates: [[metersLL(la, ta, nx, ny), metersLL(lb, tb, nx, ny), metersLL(lb, tb, -nx, -ny), metersLL(la, ta, -nx, -ny), metersLL(la, ta, nx, ny)]] } }); }
   map.getSource('planeFx').setData(fc(fx));
 }
 function applyMode() {
