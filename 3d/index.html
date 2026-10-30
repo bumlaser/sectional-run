@@ -1411,7 +1411,7 @@ const FT = .3048, CAP = 12500;
 const toLL = (x, y) => [WD.reg.clon + x / (60 * WD.reg.cos), WD.reg.clat - y / 60];
 const fromLL = (lon, lat) => [(lon - WD.reg.clon) * 60 * WD.reg.cos, -(lat - WD.reg.clat) * 60];
 const MODES = [{ name: '2D', pitch: 0 }, { name: 'CHASE', pitch: 62 }, { name: 'ORBIT', pitch: 55 }];
-let map = null, mapReady = false, viewMode = 1, terrainOn = true, planeT = 0;
+let map = null, mapReady = false, viewMode = 2, terrainOn = true, planeT = 0;   // starts in ORBIT
 try { terrainOn = localStorage.getItem('sr.terrain') !== '0'; } catch (_) {}
 function setTerrainOn(on) { terrainOn = on; try { localStorage.setItem('sr.terrain', on ? '1' : '0'); } catch (_) {} if (map) { applyMode(); planeT = 0; } }
 const KCOL = { B: '#1d5fae', D: '#1d5fae', R: '#1d5fae', P: '#1d5fae', SFRA: '#1d5fae', FRZ: '#c9a21a', MOA: '#a8327f', W: '#a8327f', A: '#a8327f', E2: '#a8327f', E5: '#a8327f', MODEC: '#a8327f' };
