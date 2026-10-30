@@ -27,6 +27,7 @@ const nav = new NavPanel({ mount: document.body, open: true,
   onAction: name => { /* 'quiz' | 'speed' | 'view' | 'fpl' from the Utilities page */ } });
 // in your frame loop, about 4 times a second:
 nav.update({ gs, trk, dis, dtk, wpt, direct, fpl, nearest, map, com, navaid, utils });
+// com: { active: { freq: "128.700", name }, standby: { freq, name } } feeds the header frequency box
 ```
 
 The left strip shows GS, TRK, DIS and DTK. The right screen opens on a 2×3 home grid (Map, FPL, Proc, Nav/Com,

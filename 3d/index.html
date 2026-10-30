@@ -139,7 +139,8 @@
  *   fpl     [{ id, name, dtk, dis, active }]          legs in order (the first entry is the departure, with no dtk/dis)
  *   nearest [{ id, name, dis, brg, tw }]              closest airports first (tw = towered)
  *   map     { range, items: [{ id, dx, dy, tw }], leg: [[dx0, dy0], [dx1, dy1]], hdg }   nm offsets from ownship, +x east, +y south
- *   com     { active, standby } · navaid { id, name, dis, brg } · utils [{ id, label, value }]
+ *   com     { active: { freq, name }, standby: { freq, name } }   freq as '132.400'; shown in the header box
+ *   navaid  { id, name, dis, brg } · utils [{ id, label, value }]
  */
 (function () {
   'use strict';
@@ -154,19 +155,26 @@
   .np-grip { width:44px; height:6px; border-radius:3px; background:repeating-linear-gradient(90deg,#4a5158 0 3px,transparent 3px 6px); }
   .np-brand { font:bold 9px "Courier New",monospace; letter-spacing:2px; color:#7d8892; }
   .np-close { width:22px; height:18px; border:1px solid #000; border-radius:4px; background:#23272b; color:#9aa6b0; font:bold 12px/1 "Courier New",monospace; cursor:pointer; padding:0; box-shadow:none; }
-  .np-screen { display:grid; grid-template-columns:74px minmax(0,1fr); grid-template-rows:100%; height:330px; background:#04080b; border:3px solid #000; border-radius:4px; overflow:hidden;
+  .np-screen { display:grid; grid-template-columns:80px minmax(0,1fr); grid-template-rows:100%; height:330px; background:#04080b; border:3px solid #000; border-radius:4px; overflow:hidden;
     box-shadow:0 0 0 1px #2f363c, inset 0 0 18px rgba(0,0,0,.9); }
-  .np-strip { display:grid; grid-template-rows:repeat(4,minmax(0,1fr)); min-height:0; border-right:1px solid #1d2a33; background:#060d12; }
-  .np-cell { display:flex; flex-direction:column; justify-content:center; padding:0 7px; border-bottom:1px solid #12202a; }
-  .np-cell:last-child { border-bottom:0; }
+  .np-strip { display:grid; grid-template-rows:repeat(4,minmax(0,1fr)); gap:5px; min-height:0; padding:5px; border-right:1px solid #1d2a33; background:#060d12; }
+  .np-cell { display:flex; flex-direction:column; justify-content:center; padding:0 6px; min-height:0; border:1px solid #24343f; border-radius:5px;
+    background:linear-gradient(180deg,#03080b,#08131a); box-shadow:inset 0 2px 4px rgba(0,0,0,.85), inset 0 -1px 0 rgba(255,255,255,.04), 0 1px 0 rgba(255,255,255,.03); }
+  .np-cell b { font-size:16px !important; }
   .np-cell small { font:bold 10px "Courier New",monospace; color:#4fd1e8; letter-spacing:1px; }
   .np-cell b { font:bold 17px "Courier New",monospace; color:#f2f6f8; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .np-cell i { font:normal 9px "Courier New",monospace; color:#7c8a94; font-style:normal; }
   .np-cell.np-mag b { color:#ff4fd8; }
   .np-main { display:flex; flex-direction:column; min-width:0; min-height:0; }
-  .np-title { display:flex; align-items:center; justify-content:space-between; height:24px; padding:0 8px; background:#0c1820; border-bottom:1px solid #1d2a33;
+  .np-title { display:flex; align-items:center; justify-content:space-between; gap:6px; height:38px; padding:0 4px 0 8px; background:#0c1820; border-bottom:1px solid #1d2a33;
     font:bold 11px "Courier New",monospace; letter-spacing:1px; color:#bcd0dc; }
-  .np-title .np-wpt { color:#ff4fd8; }
+  .np-title [data-title] { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .np-freq { display:grid; grid-template-rows:1fr 1fr; flex:none; padding:2px 6px; border:1px solid #2a3c48; border-radius:4px; background:#03070a;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.8); font-family:"Courier New",monospace; line-height:1.05; }
+  .np-f { display:flex; align-items:baseline; justify-content:flex-end; gap:5px; }
+  .np-f i { font-style:normal; font-size:8px; letter-spacing:.5px; color:#5d7280; }
+  .np-f b { font-size:13px; font-variant-numeric:tabular-nums; letter-spacing:.5px; }
+  .np-f.np-act b { color:#39ff6a; text-shadow:0 0 6px rgba(57,255,106,.35); } .np-f.np-sby b { color:#d8e2e8; font-size:12px; }
   .np-page { flex:1; min-height:0; overflow:auto; padding:8px; scrollbar-width:thin; }
   .np-grid { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(3,1fr); gap:8px; height:100%; }
   .np-key { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; border-radius:8px; cursor:pointer;
@@ -187,6 +195,17 @@
   .np-kv { display:grid; grid-template-columns:auto 1fr; gap:4px 10px; font:12px "Courier New",monospace; padding:4px 2px; }
   .np-kv span { color:#4fd1e8; } .np-kv b { color:#f2f6f8; }
   .np-canvas { width:100%; height:100%; display:block; }
+  .np-page.np-mappage { padding:0; overflow:hidden; }
+  .np-mapwrap { position:relative; width:100%; height:100%; }
+  .np-mwpt { position:absolute; top:6px; right:6px; padding:3px 7px; border:1px solid rgba(255,79,216,.55); border-radius:4px; background:rgba(4,8,11,.55);
+    font:bold 12px "Courier New",monospace; color:#ff4fd8; line-height:1.15; text-align:right; pointer-events:none; }
+  .np-mwpt i { display:block; font-style:normal; font-size:9px; color:#c5d2da; }
+  .np-mrng { position:absolute; left:6px; bottom:6px; font:bold 10px "Courier New",monospace; color:#4fd1e8; background:rgba(4,8,11,.55); padding:2px 5px; border-radius:3px; pointer-events:none; }
+  .np-zoom { position:absolute; right:6px; bottom:6px; display:flex; flex-direction:column; border:1px solid #2c4252; border-radius:14px; overflow:hidden;
+    background:rgba(12,24,32,.85); box-shadow:0 2px 0 #000; }
+  .np-zoom button { width:30px; height:28px; border:0; margin:0; padding:0; background:transparent; color:#dfe8ee; font:bold 17px/1 "Courier New",monospace; cursor:pointer; box-shadow:none; }
+  .np-zoom button + button { border-top:1px solid #2c4252; }
+  .np-zoom button:active { background:#24506a; }
   .np-keys { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
   .np-hw { height:34px; border-radius:7px; border:2px solid #000; cursor:pointer; color:#cfd8de; font:bold 13px "Courier New",monospace;
     background:linear-gradient(180deg,#3a4147,#24292d); box-shadow:0 3px 0 #000, inset 0 1px 0 rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; gap:6px; padding:0; }
@@ -211,7 +230,7 @@
 
   class NavPanel {
     constructor(opts = {}) {
-      this.opts = opts; this.data = {}; this.page = 'home'; this.lastHtml = '';
+      this.opts = opts; this.data = {}; this.page = 'home'; this.lastHtml = ''; this.ranges = [2, 5, 10, 20, 40]; this.ri = 3;
       if (!document.getElementById('np-style')) { const st = document.createElement('style'); st.id = 'np-style'; st.textContent = CSS; document.head.appendChild(st); }
       const el = this.el = document.createElement('div'); el.className = 'np-root'; el.setAttribute('role', 'region'); el.setAttribute('aria-label', 'Navigator');
       el.innerHTML = `<div class="np-bezel">
@@ -223,7 +242,11 @@
               <div class="np-cell np-mag"><small>DIS</small><b data-k="dis">--.-</b><i>NM</i></div>
               <div class="np-cell np-mag"><small>DTK</small><b data-k="dtk">---°</b><i>MAG</i></div>
             </div>
-            <div class="np-main"><div class="np-title"><span data-title>HOME</span><span class="np-wpt" data-wpt></span></div><div class="np-page" data-page></div></div>
+            <div class="np-main">
+              <div class="np-title"><span data-title>HOME</span>
+                <div class="np-freq" aria-label="COM frequencies"><div class="np-f np-act" data-fa-name><i>COM</i><b data-fa>---.---</b></div><div class="np-f np-sby" data-fs-name><i>STBY</i><b data-fs>---.---</b></div></div>
+              </div>
+              <div class="np-page" data-page></div></div>
           </div>
           <div class="np-keys">
             <button class="np-hw" type="button" data-hw="home" aria-label="Home">${ICON.home}<span>HOME</span></button>
@@ -245,7 +268,9 @@
       const s = this.strip;
       s.gs.textContent = d.gs == null ? '---' : Math.round(d.gs); s.trk.textContent = f3(d.trk) + '°';
       s.dis.textContent = fd(d.dis); s.dtk.textContent = f3(d.dtk) + '°';
-      this.$('[data-wpt]').textContent = d.wpt ? (d.direct ? 'D→ ' : '') + d.wpt : '';
+      const c = this.data.com || {}, a = c.active || {}, sb = c.standby || {};
+      this.$('[data-fa]').textContent = a.freq || '---.---'; this.$('[data-fs]').textContent = sb.freq || '---.---';
+      this.$('[data-fa-name]').title = a.name || ''; this.$('[data-fs-name]').title = sb.name || '';
       this.render();
     }
     show() { this.el.hidden = false; this.place(); this.render(true); }
@@ -262,7 +287,8 @@
     }
     // ---- internals ----
     _click(e) {
-      const t = e.target.closest('[data-close],[data-hw],[data-go],[data-dto],[data-act]'); if (!t) return;
+      const t = e.target.closest('[data-close],[data-hw],[data-go],[data-dto],[data-act],[data-zoom]'); if (!t) return;
+      if (t.dataset.zoom) { this.ri = Math.max(0, Math.min(this.ranges.length - 1, this.ri + (t.dataset.zoom === '+' ? -1 : 1))); return this._drawMap(); }
       if (t.hasAttribute('data-close')) return this.hide();
       if (t.dataset.hw === 'home') return this.go('home');
       if (t.dataset.hw === 'direct') return this.go('direct');
@@ -281,7 +307,13 @@
       if (this.el.hidden) return;
       const d = this.data, P = this.page, title = { home: 'HOME', direct: 'DIRECT-TO', map: 'MAP', fpl: 'FLIGHT PLAN', proc: 'PROCEDURES', navcom: 'NAV / COM', nearest: 'NEAREST AIRPORT', utilities: 'UTILITIES' }[P];
       this.$('[data-title]').textContent = title;
-      if (P === 'map') { if (force || !this.canvas) { this.$('[data-page]').innerHTML = '<canvas class="np-canvas"></canvas>'; this.canvas = this.$('canvas'); this.lastHtml = ''; } return this._drawMap(); }
+      const pg = this.$('[data-page]'); pg.classList.toggle('np-mappage', P === 'map');
+      if (P === 'map') {
+        if (force || !this.canvas) { pg.innerHTML = `<div class="np-mapwrap"><canvas class="np-canvas"></canvas><div class="np-mwpt" data-mwpt></div><div class="np-mrng" data-mrng></div>
+          <div class="np-zoom" role="group" aria-label="Map range"><button type="button" data-zoom="+" aria-label="Zoom in">+</button><button type="button" data-zoom="-" aria-label="Zoom out">−</button></div></div>`;
+          this.canvas = this.$('canvas'); this.lastHtml = ''; }
+        const w = this.$('[data-mwpt]'); w.innerHTML = d.wpt ? `${d.direct ? 'D→ ' : ''}${esc(d.wpt)}<i>${fd(d.dis)} NM · ${f3(d.dtk)}°</i>` : '';
+        return this._drawMap(); }
       this.canvas = null;
       let html = '';
       if (P === 'home') html = `<div class="np-grid">${PAGES.map(([k, l]) => `<button class="np-key" type="button" data-go="${k}">${ICON[k]}<span>${l}</span></button>`).join('')}</div>`;
@@ -301,12 +333,13 @@
           <div class="np-note">Tap an airport to go direct. <span class="np-tw">Blue</span> = towered, <span class="np-ntw">magenta</span> = CTAF.</div>`;
       } else if (P === 'navcom') {
         const c = d.com || {}, n = d.navaid || {};
-        html = `<div class="np-kv"><span>COM ACT</span><b>${esc(c.active || '—')}</b><span>COM STBY</span><b>${esc(c.standby || '—')}</b>
+        const ca = c.active || {}, cs = c.standby || {};
+        html = `<div class="np-kv"><span>COM ACT</span><b><span style="color:#39ff6a">${esc(ca.freq || '---.---')}</span> ${esc(ca.name || '')}</b><span>COM STBY</span><b>${esc(cs.freq || '---.---')} ${esc(cs.name || '')}</b>
           <span>NAV</span><b>${n.id ? esc(n.id) + ' ' + esc(n.name || '') : '—'}</b><span>BRG / DIS</span><b>${n.id ? f3(n.brg) + '° · ' + fd(n.dis) + ' NM' : '—'}</b></div>
           <div class="np-note">Use the RADIO button to call a facility. The last one you called shows here as active.</div>`;
       } else if (P === 'proc') html = `<div class="np-note">No procedures are loaded for a VFR flight.<br><br>Departures, arrivals and approaches will show here when IFR mode arrives.</div>`;
       else if (P === 'utilities') html = `<div class="np-list">${(d.utils || []).map(u => `<button class="np-row np-tap" type="button" data-act="${esc(u.id)}"><span><b>${esc(u.label)}</b></span><span></span><span class="np-num">${esc(u.value)}</span></button>`).join('')}</div>`;
-      if (force || html !== this.lastHtml) { const pg = this.$('[data-page]'), sc = pg.scrollTop; pg.innerHTML = html; pg.scrollTop = sc; this.lastHtml = html; }
+      if (force || html !== this.lastHtml) { const sc = pg.scrollTop; pg.innerHTML = html; pg.scrollTop = sc; this.lastHtml = html; }
     }
     _drawMap() {
       const cv = this.canvas, d = this.data.map; if (!cv) return;
@@ -314,10 +347,10 @@
       if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
       const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#04080b'; g.fillRect(0, 0, w, h);
       if (!d) return;
-      const R = d.range || 20, cx = w / 2, cy = h * .62, k = (Math.min(w, h) * .55) / R, rot = -(d.hdg || 0) * Math.PI / 180;   // track-up
+      const R = this.ranges[this.ri], cx = w / 2, cy = h * .62, k = (Math.min(w, h) * .55) / R, rot = -(d.hdg || 0) * Math.PI / 180;   // track-up
+      const rl = this.$('[data-mrng]'); if (rl) rl.textContent = R + ' NM';
       const toS = (dx, dy) => { const x = dx * Math.cos(rot) - dy * Math.sin(rot), y = dx * Math.sin(rot) + dy * Math.cos(rot); return [cx + x * k, cy + y * k]; };
       g.strokeStyle = '#1d3a48'; g.lineWidth = 1; for (const r of [R / 2, R]) { g.beginPath(); g.arc(cx, cy, r * k, 0, 6.283); g.stroke(); }
-      g.fillStyle = '#4d6b7a'; g.font = '9px "Courier New",monospace'; g.fillText(R / 2 + ' NM', cx + 4, cy - R / 2 * k - 3);
       if (d.leg) { const [a, b] = [toS(...d.leg[0]), toS(...d.leg[1])]; g.strokeStyle = '#ff4fd8'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
       for (const it of d.items || []) { const [x, y] = toS(it.dx, it.dy); if (x < -10 || y < -10 || x > w + 10 || y > h + 10) continue;
         g.strokeStyle = it.tw ? '#5aa0ff' : '#ff4fd8'; g.lineWidth = 1.6; g.beginPath(); g.arc(x, y, 4, 0, 6.283); g.stroke();
@@ -358,6 +391,10 @@ const toNM = (lat, lon) => [(lon - WD.reg.clon) * 60 * WD.reg.cos, -(lat - WD.re
 const R = WD.reg, WORLD = { x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1 };
 const AIRPORTS = WD.aps, AP = Object.fromEntries(AIRPORTS.map(a => [a.id, a]));
 const START = AP.FDK, DEST = AP.W29;
+// frequencies read from the FAA Baltimore–Washington TAC
+const FREQ = { 'Frederick Tower': '132.400', 'Potomac Approach': '128.700', 'Martin State Tower': '121.300', 'Easton Tower': '118.525', 'Hagerstown Tower': '120.300',
+  'Manassas Tower': '133.100', 'Bay Bridge CTAF': '122.725', 'Leesburg Radio': '122.200', 'Guard': '121.500' };
+const AP_FREQ = { FDK: 'CT 132.4', MTN: 'CT 121.3', ESN: 'CT 118.525', HGR: 'CT 120.3', HEF: 'CT 133.1', W29: 'CTAF 122.725' };
 const TOWER_NAMES = { FDK: 'Frederick Tower', MTN: 'Martin State Tower', ESN: 'Easton Tower', HGR: 'Hagerstown Tower', MRB: 'Martinsburg Tower', HEF: 'Manassas Tower', DAA: 'Davison Tower', NYG: 'Quantico Tower' };
 const VOL = WD.vols.map((v, i) => {
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const r of v.r) for (const [x, y] of r) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
@@ -566,16 +603,16 @@ function facilities() {
 function posn(x, y) { const d = Math.hypot(pl.x - x, pl.y - y), b = brg(x, y, pl.x, pl.y); return `${Math.round(d)} miles ${['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(b / 45) % 8]} at ${fmt(pl.alt)}`; }
 function openRadio() {
   const rows = facilities().map(f => { const st = f.g === 'B' && game.clrB ? '<span class="pos">CLEARED ✓</span>' : game.contact[f.g] ? '<span class="pos">TWO-WAY ✓</span>' : f.g === 'CTAF' && game.ctaf ? '<span class="pos">ANNOUNCED ✓</span>' : '';
-    return `<div class="fac"><div><b>${f.name}</b> ${st}<br><small>${f.note} · ${Math.hypot(pl.x - f.x, pl.y - f.y).toFixed(0)} NM</small></div><button type="button" data-call="${f.g}">${f.act}</button></div>`; }).join('');
+    return `<div class="fac"><div><b>${f.name}</b> ${st}<br><small>${FREQ[f.name] ? FREQ[f.name] + ' · ' : ''}${f.note} · ${Math.hypot(pl.x - f.x, pl.y - f.y).toFixed(0)} NM</small></div><button type="button" data-call="${f.g}">${f.act}</button></div>`; }).join('');
   const qrow = `<div class="fac"><div><b>Checkride questions</b><br><small>${quizOn ? 'on: questions pop up at chart features' : 'off: free flight, no questions'}</small></div><button type="button" data-call="QUIZ">${quizOn ? 'Turn off' : 'Turn on'}</button></div>`;
-  const fss = `<div class="fac"><div><b>Leesburg Radio (Flight Service)</b><br><small>special use airspace status</small></div><button type="button" data-call="FSS">SUA status?</button></div>`;
+  const fss = `<div class="fac"><div><b>Leesburg Radio (Flight Service)</b><br><small>122.200 · special use airspace status</small></div><button type="button" data-call="FSS">SUA status?</button></div>`;
   const log = game.radioLog.slice(-4).map(m => `<p style="margin:4px 0;font-family:var(--mono);font-size:12px;color:${m.who === 'YOU' ? '#9fd3ff' : '#9df27f'}">${m.who}: ${m.text}</p>`).join('');
   document.getElementById('sheetCard').innerHTML = `<div class="kicker">RADIO · N421AP</div><h3>Who do you want to call?</h3>${rows || '<p>No approach, tower or CTAF in range.</p>'}${fss}${qrow}${log ? '<div style="margin-top:10px">' + log + '</div>' : ''}<div class="actions"><button type="button" data-close>Close</button></div>`;
   showSheet(true);
 }
 function call(g) {
   if (g === 'QUIZ') { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); return openRadio(); }
-  if (g === 'FSS') { radioMsg('YOU', 'Leesburg Radio, N421AP, request status of the restricted areas along the bay.'); radioMsg('FSS', `N421AP, ${rStatusLine().replace(/<\/?b>/g, '')}. And remember, no SFRA flight plan on file for you.`); return openRadio(); }
+  if (g === 'FSS') { game.lastFac = 'Leesburg Radio'; radioMsg('YOU', 'Leesburg Radio, N421AP, request status of the restricted areas along the bay.'); radioMsg('FSS', `N421AP, ${rStatusLine().replace(/<\/?b>/g, '')}. And remember, no SFRA flight plan on file for you.`); return openRadio(); }
   const f = facilities().find(f => f.g === g); if (!f) return; game.lastFac = f.name;
   if (g === 'B') {
     radioMsg('YOU', `Potomac Approach, N421AP, ${posn(AP.BWI.x, AP.BWI.y)} of BWI, request Class Bravo transition eastbound to Bay Bridge.`);
@@ -720,7 +757,7 @@ function drawAirports() {
     // true-scale runways when zoomed well in
     if (cam.s > 70) for (const r of rws) { const [p0, p1] = [P(r[0], r[1]), P(r[2], r[3])]; ctx.strokeStyle = 'rgba(60,62,66,.9)'; ctx.lineWidth = Math.max(2.5, r[5] / 6076 * cam.s); ctx.beginPath(); ctx.moveTo(...p0); ctx.lineTo(...p1); ctx.stroke(); }
     if ((cam.s > 10 || big || a === DEST || a === START) && (cam.hz < .001 || d2(a) < 12 || a === DEST)) { const nm = a.n.toUpperCase().replace(/\/.*$/, '');
-      label(`${nm} (${a.id})`, x + rr + 6, y - 6, col, 11, '900', 'left'); label(`${a.tw ? 'CT ★ · ' : ''}${a.e} ft`, x + rr + 6, y + 7, col, 10, 'bold', 'left'); }
+      label(`${nm} (${a.id})`, x + rr + 6, y - 6, col, 11, '900', 'left'); label(`${AP_FREQ[a.id] ? AP_FREQ[a.id] + (a.tw ? ' ★' : '') + ' · ' : a.tw ? 'CT ★ · ' : ''}${a.e} ft`, x + rr + 6, y + 7, col, 10, 'bold', 'left'); }
     if (a === DEST) { ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.ellipse(x, y, 24, 24 * cam.T, 0, 0, 6.283); ctx.stroke(); ctx.setLineDash([]); } }
 }
 function drawVolumes3D() {
@@ -864,8 +901,8 @@ function navData() {
   return {
     gs: TAS, trk: norm(pl.hdg + VAR), dis: d2(wp), dtk: norm(brg(o[0], o[1], wp.x, wp.y) + VAR), wpt: wp.id, direct: N.direct, fpl, nearest: near,
     map: { range: 20, hdg: pl.hdg, items: AIRPORTS.filter(a => d2(a) < 30).map(a => ({ id: a.id, dx: a.x - pl.x, dy: a.y - pl.y, tw: !!a.tw })), leg: [[o[0] - pl.x, o[1] - pl.y], [wp.x - pl.x, wp.y - pl.y]] },
-    com: { active: game.lastFac, standby: stby ? stby.name : '' }, navaid: vor,
-    utils: [{ id: 'quiz', label: 'Checkride questions', value: quizOn ? 'ON' : 'OFF' }, { id: 'speed', label: 'Sim speed', value: simRate + '×' }, { id: 'view', label: 'Camera / view', value: 'CYCLE' }, { id: 'fpl', label: 'Restore flight plan', value: `${START.id}→${DEST.id}` }],
+    com: { active: { name: game.lastFac, freq: FREQ[game.lastFac] }, standby: stby ? { name: stby.name, freq: FREQ[stby.name] } : { name: 'Guard', freq: FREQ.Guard } }, navaid: vor,
+    utils: [...(typeof terrainOn !== 'undefined' ? [{ id: 'terrain', label: '3D terrain', value: terrainOn ? 'ON' : 'OFF' }] : []), { id: 'quiz', label: 'Checkride questions', value: quizOn ? 'ON' : 'OFF' }, { id: 'speed', label: 'Sim speed', value: simRate + '×' }, { id: 'view', label: 'Camera / view', value: 'CYCLE' }, { id: 'fpl', label: 'Restore flight plan', value: `${START.id}→${DEST.id}` }],
   };
 }
 function initNav() {
@@ -874,7 +911,7 @@ function initNav() {
   nav = new NavPanel({ mount: document.body, open: W >= 900, position: pos || undefined,
     onMove: p => { try { localStorage.setItem('sr.navpos', JSON.stringify(p)); } catch (_) {} },
     onDirectTo: id => { const a = ANY(id); if (!a || !game) return; game.nav = { ...game.nav, wpt: id, origin: [pl.x, pl.y], direct: true }; flash(`Direct to ${id}: ${hdg3(brg(pl.x, pl.y, a.x, a.y) + VAR)}°, ${d2(a).toFixed(1)} NM`, '#ff9ae8', 2.6); },
-    onAction: k => { if (k === 'quiz') setQuiz(!quizOn); else if (k === 'speed') cycleSpeed(); else if (k === 'view') toggleView();
+    onAction: k => { if (k === 'terrain' && typeof setTerrainOn === 'function') setTerrainOn(!terrainOn); else if (k === 'quiz') setQuiz(!quizOn); else if (k === 'speed') cycleSpeed(); else if (k === 'view') toggleView();
       else if (k === 'fpl') game.nav = { plan: [START.id, DEST.id], wpt: DEST.id, origin: [START.x, START.y], direct: false }; navT = 0; } });
   document.getElementById('bNav').classList.toggle('on', nav.visible);
 }
@@ -937,7 +974,9 @@ const FT = .3048, CAP = 12500;
 const toLL = (x, y) => [WD.reg.clon + x / (60 * WD.reg.cos), WD.reg.clat - y / 60];
 const fromLL = (lon, lat) => [(lon - WD.reg.clon) * 60 * WD.reg.cos, -(lat - WD.reg.clat) * 60];
 const MODES = [{ name: '2D', pitch: 0 }, { name: 'CHASE', pitch: 62 }, { name: 'ORBIT', pitch: 55 }];
-let map = null, mapReady = false, viewMode = 1;
+let map = null, mapReady = false, viewMode = 1, terrainOn = true, planeT = 0;
+try { terrainOn = localStorage.getItem('sr.terrain') !== '0'; } catch (_) {}
+function setTerrainOn(on) { terrainOn = on; try { localStorage.setItem('sr.terrain', on ? '1' : '0'); } catch (_) {} if (map) { applyMode(); planeT = 0; } }
 const KCOL = { B: '#1d5fae', D: '#1d5fae', R: '#1d5fae', P: '#1d5fae', SFRA: '#1d5fae', FRZ: '#c9a21a', MOA: '#a8327f', W: '#a8327f', A: '#a8327f', E2: '#a8327f', E5: '#a8327f', MODEC: '#a8327f' };
 const fc = feats => ({ type: 'FeatureCollection', features: feats });
 const ringLL = r => { const c = r.map(([x, y]) => toLL(x, y)); c.push(c[0]); return c; };
@@ -1007,7 +1046,7 @@ function addLayers() {
   map.addSource('vol3', { type: 'geojson', data: fc(ruled.map(volFeat)) });
   map.addSource('vlab', { type: 'geojson', data: fc(VOL.map(v => pt(v.lp[0], v.lp[1], { t: volLabel(v), col: KCOL[v.k], k: v.k })).filter(f => f.properties.t)) });
   map.addSource('route', { type: 'geojson', data: fc([line([[START.x, START.y], [DEST.x, DEST.y]])]) });
-  map.addSource('aps', { type: 'geojson', data: fc(AIRPORTS.map(a => pt(a.x, a.y, { t: `${a.n.toUpperCase().replace(/\/.*$/, '')} (${a.id})\n${a.tw ? 'CT ★ · ' : ''}${a.e}`, col: a.tw ? '#1d5fae' : '#a8327f', dest: a === DEST ? 1 : 0 }))) });
+  map.addSource('aps', { type: 'geojson', data: fc(AIRPORTS.map(a => pt(a.x, a.y, { t: `${a.n.toUpperCase().replace(/\/.*$/, '')} (${a.id})\n${AP_FREQ[a.id] ? AP_FREQ[a.id] + (a.tw ? ' ★' : '') + ' · ' : a.tw ? 'CT ★ · ' : ''}${a.e}`, col: a.tw ? '#1d5fae' : '#a8327f', dest: a === DEST ? 1 : 0 }))) });
   map.addSource('obs', { type: 'geojson', data: fc(TOWERS.map(t => pt(t.x, t.y, { t: `${t.m}\n(${t.a})`, l: t.l }))) });
   map.addSource('obs3', { type: 'geojson', data: fc(TOWERS.map(t => { const [lon, lat] = toLL(t.x, t.y), s = 45;
     return { type: 'Feature', properties: { h: t.a * FT * EX }, geometry: { type: 'Polygon', coordinates: [[metersLL(lon, lat, -s, -s), metersLL(lon, lat, s, -s), metersLL(lon, lat, s, s), metersLL(lon, lat, -s, s), metersLL(lon, lat, -s, -s)]] } }; })) });
@@ -1088,7 +1127,7 @@ function updatePlane() {
 }
 function applyMode() {
   const m = MODES[viewMode], three = viewMode !== 0;
-  if (map.getSource('dem')) map.setTerrain(three ? { source: 'dem', exaggeration: EX } : null);
+  if (map.getSource('dem')) map.setTerrain(three && terrainOn ? { source: 'dem', exaggeration: EX } : null);
   for (const id of ['x-sfra', 'x-moa', 'x-b', 'x-sua', 'x-d', 'obs3']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', three ? 'visible' : 'none');
   if (viewMode === 2) { map.dragRotate.enable(); map.touchZoomRotate.enableRotation(); map.touchPitch.enable(); }
   else { map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.touchPitch.disable(); }
@@ -1113,7 +1152,8 @@ toggleChart = function () { cam.chart = !cam.chart; map.setLayoutProperty('tac',
 zoom = function (f) { map.easeTo({ zoom: map.getZoom() + Math.log2(f) * 1.2, duration: 250 }); };
 render = function () {
   if (!mapReady || !pl) return;
-  updateCamera(); updatePlane();
+  updateCamera();
+  const now = performance.now(); if (now - planeT > 50) { planeT = now; updatePlane(); }   // ~20 Hz: rebuilding the plane geometry every frame is the costliest part
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
   drawHUD();
 };
@@ -1121,6 +1161,7 @@ render = function () {
   const c = toLL(START.x, START.y);
   fetch('https://tiles.openfreemap.org/styles/positron').then(r => r.json()).then(style => {
     map = new maplibregl.Map({ container: 'map', style: sectionalTint(style), center: c, zoom: 10.3, pitch: 62, bearing: 112, maxPitch: 78, dragPan: false, keyboard: false,
+      pixelRatio: Math.min(devicePixelRatio || 1, 1.5),   // full Retina resolution costs a lot of GPU for little gain here
       attributionControl: { compact: true }, fadeDuration: 0 });
     map.on('load', () => { addLayers(); mapReady = true; mapReadyHook(); });
     map.on('click', e => info(e.point.x, e.point.y));

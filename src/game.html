@@ -141,6 +141,10 @@ const toNM = (lat, lon) => [(lon - WD.reg.clon) * 60 * WD.reg.cos, -(lat - WD.re
 const R = WD.reg, WORLD = { x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1 };
 const AIRPORTS = WD.aps, AP = Object.fromEntries(AIRPORTS.map(a => [a.id, a]));
 const START = AP.FDK, DEST = AP.W29;
+// frequencies read from the FAA Baltimore–Washington TAC
+const FREQ = { 'Frederick Tower': '132.400', 'Potomac Approach': '128.700', 'Martin State Tower': '121.300', 'Easton Tower': '118.525', 'Hagerstown Tower': '120.300',
+  'Manassas Tower': '133.100', 'Bay Bridge CTAF': '122.725', 'Leesburg Radio': '122.200', 'Guard': '121.500' };
+const AP_FREQ = { FDK: 'CT 132.4', MTN: 'CT 121.3', ESN: 'CT 118.525', HGR: 'CT 120.3', HEF: 'CT 133.1', W29: 'CTAF 122.725' };
 const TOWER_NAMES = { FDK: 'Frederick Tower', MTN: 'Martin State Tower', ESN: 'Easton Tower', HGR: 'Hagerstown Tower', MRB: 'Martinsburg Tower', HEF: 'Manassas Tower', DAA: 'Davison Tower', NYG: 'Quantico Tower' };
 const VOL = WD.vols.map((v, i) => {
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const r of v.r) for (const [x, y] of r) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
@@ -349,16 +353,16 @@ function facilities() {
 function posn(x, y) { const d = Math.hypot(pl.x - x, pl.y - y), b = brg(x, y, pl.x, pl.y); return `${Math.round(d)} miles ${['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(b / 45) % 8]} at ${fmt(pl.alt)}`; }
 function openRadio() {
   const rows = facilities().map(f => { const st = f.g === 'B' && game.clrB ? '<span class="pos">CLEARED ✓</span>' : game.contact[f.g] ? '<span class="pos">TWO-WAY ✓</span>' : f.g === 'CTAF' && game.ctaf ? '<span class="pos">ANNOUNCED ✓</span>' : '';
-    return `<div class="fac"><div><b>${f.name}</b> ${st}<br><small>${f.note} · ${Math.hypot(pl.x - f.x, pl.y - f.y).toFixed(0)} NM</small></div><button type="button" data-call="${f.g}">${f.act}</button></div>`; }).join('');
+    return `<div class="fac"><div><b>${f.name}</b> ${st}<br><small>${FREQ[f.name] ? FREQ[f.name] + ' · ' : ''}${f.note} · ${Math.hypot(pl.x - f.x, pl.y - f.y).toFixed(0)} NM</small></div><button type="button" data-call="${f.g}">${f.act}</button></div>`; }).join('');
   const qrow = `<div class="fac"><div><b>Checkride questions</b><br><small>${quizOn ? 'on: questions pop up at chart features' : 'off: free flight, no questions'}</small></div><button type="button" data-call="QUIZ">${quizOn ? 'Turn off' : 'Turn on'}</button></div>`;
-  const fss = `<div class="fac"><div><b>Leesburg Radio (Flight Service)</b><br><small>special use airspace status</small></div><button type="button" data-call="FSS">SUA status?</button></div>`;
+  const fss = `<div class="fac"><div><b>Leesburg Radio (Flight Service)</b><br><small>122.200 · special use airspace status</small></div><button type="button" data-call="FSS">SUA status?</button></div>`;
   const log = game.radioLog.slice(-4).map(m => `<p style="margin:4px 0;font-family:var(--mono);font-size:12px;color:${m.who === 'YOU' ? '#9fd3ff' : '#9df27f'}">${m.who}: ${m.text}</p>`).join('');
   document.getElementById('sheetCard').innerHTML = `<div class="kicker">RADIO · N421AP</div><h3>Who do you want to call?</h3>${rows || '<p>No approach, tower or CTAF in range.</p>'}${fss}${qrow}${log ? '<div style="margin-top:10px">' + log + '</div>' : ''}<div class="actions"><button type="button" data-close>Close</button></div>`;
   showSheet(true);
 }
 function call(g) {
   if (g === 'QUIZ') { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); return openRadio(); }
-  if (g === 'FSS') { radioMsg('YOU', 'Leesburg Radio, N421AP, request status of the restricted areas along the bay.'); radioMsg('FSS', `N421AP, ${rStatusLine().replace(/<\/?b>/g, '')}. And remember, no SFRA flight plan on file for you.`); return openRadio(); }
+  if (g === 'FSS') { game.lastFac = 'Leesburg Radio'; radioMsg('YOU', 'Leesburg Radio, N421AP, request status of the restricted areas along the bay.'); radioMsg('FSS', `N421AP, ${rStatusLine().replace(/<\/?b>/g, '')}. And remember, no SFRA flight plan on file for you.`); return openRadio(); }
   const f = facilities().find(f => f.g === g); if (!f) return; game.lastFac = f.name;
   if (g === 'B') {
     radioMsg('YOU', `Potomac Approach, N421AP, ${posn(AP.BWI.x, AP.BWI.y)} of BWI, request Class Bravo transition eastbound to Bay Bridge.`);
@@ -503,7 +507,7 @@ function drawAirports() {
     // true-scale runways when zoomed well in
     if (cam.s > 70) for (const r of rws) { const [p0, p1] = [P(r[0], r[1]), P(r[2], r[3])]; ctx.strokeStyle = 'rgba(60,62,66,.9)'; ctx.lineWidth = Math.max(2.5, r[5] / 6076 * cam.s); ctx.beginPath(); ctx.moveTo(...p0); ctx.lineTo(...p1); ctx.stroke(); }
     if ((cam.s > 10 || big || a === DEST || a === START) && (cam.hz < .001 || d2(a) < 12 || a === DEST)) { const nm = a.n.toUpperCase().replace(/\/.*$/, '');
-      label(`${nm} (${a.id})`, x + rr + 6, y - 6, col, 11, '900', 'left'); label(`${a.tw ? 'CT ★ · ' : ''}${a.e} ft`, x + rr + 6, y + 7, col, 10, 'bold', 'left'); }
+      label(`${nm} (${a.id})`, x + rr + 6, y - 6, col, 11, '900', 'left'); label(`${AP_FREQ[a.id] ? AP_FREQ[a.id] + (a.tw ? ' ★' : '') + ' · ' : a.tw ? 'CT ★ · ' : ''}${a.e} ft`, x + rr + 6, y + 7, col, 10, 'bold', 'left'); }
     if (a === DEST) { ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.ellipse(x, y, 24, 24 * cam.T, 0, 0, 6.283); ctx.stroke(); ctx.setLineDash([]); } }
 }
 function drawVolumes3D() {
@@ -647,8 +651,8 @@ function navData() {
   return {
     gs: TAS, trk: norm(pl.hdg + VAR), dis: d2(wp), dtk: norm(brg(o[0], o[1], wp.x, wp.y) + VAR), wpt: wp.id, direct: N.direct, fpl, nearest: near,
     map: { range: 20, hdg: pl.hdg, items: AIRPORTS.filter(a => d2(a) < 30).map(a => ({ id: a.id, dx: a.x - pl.x, dy: a.y - pl.y, tw: !!a.tw })), leg: [[o[0] - pl.x, o[1] - pl.y], [wp.x - pl.x, wp.y - pl.y]] },
-    com: { active: game.lastFac, standby: stby ? stby.name : '' }, navaid: vor,
-    utils: [{ id: 'quiz', label: 'Checkride questions', value: quizOn ? 'ON' : 'OFF' }, { id: 'speed', label: 'Sim speed', value: simRate + '×' }, { id: 'view', label: 'Camera / view', value: 'CYCLE' }, { id: 'fpl', label: 'Restore flight plan', value: `${START.id}→${DEST.id}` }],
+    com: { active: { name: game.lastFac, freq: FREQ[game.lastFac] }, standby: stby ? { name: stby.name, freq: FREQ[stby.name] } : { name: 'Guard', freq: FREQ.Guard } }, navaid: vor,
+    utils: [...(typeof terrainOn !== 'undefined' ? [{ id: 'terrain', label: '3D terrain', value: terrainOn ? 'ON' : 'OFF' }] : []), { id: 'quiz', label: 'Checkride questions', value: quizOn ? 'ON' : 'OFF' }, { id: 'speed', label: 'Sim speed', value: simRate + '×' }, { id: 'view', label: 'Camera / view', value: 'CYCLE' }, { id: 'fpl', label: 'Restore flight plan', value: `${START.id}→${DEST.id}` }],
   };
 }
 function initNav() {
@@ -657,7 +661,7 @@ function initNav() {
   nav = new NavPanel({ mount: document.body, open: W >= 900, position: pos || undefined,
     onMove: p => { try { localStorage.setItem('sr.navpos', JSON.stringify(p)); } catch (_) {} },
     onDirectTo: id => { const a = ANY(id); if (!a || !game) return; game.nav = { ...game.nav, wpt: id, origin: [pl.x, pl.y], direct: true }; flash(`Direct to ${id}: ${hdg3(brg(pl.x, pl.y, a.x, a.y) + VAR)}°, ${d2(a).toFixed(1)} NM`, '#ff9ae8', 2.6); },
-    onAction: k => { if (k === 'quiz') setQuiz(!quizOn); else if (k === 'speed') cycleSpeed(); else if (k === 'view') toggleView();
+    onAction: k => { if (k === 'terrain' && typeof setTerrainOn === 'function') setTerrainOn(!terrainOn); else if (k === 'quiz') setQuiz(!quizOn); else if (k === 'speed') cycleSpeed(); else if (k === 'view') toggleView();
       else if (k === 'fpl') game.nav = { plan: [START.id, DEST.id], wpt: DEST.id, origin: [START.x, START.y], direct: false }; navT = 0; } });
   document.getElementById('bNav').classList.toggle('on', nav.visible);
 }

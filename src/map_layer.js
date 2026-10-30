@@ -7,7 +7,9 @@ const FT = .3048, CAP = 12500;
 const toLL = (x, y) => [WD.reg.clon + x / (60 * WD.reg.cos), WD.reg.clat - y / 60];
 const fromLL = (lon, lat) => [(lon - WD.reg.clon) * 60 * WD.reg.cos, -(lat - WD.reg.clat) * 60];
 const MODES = [{ name: '2D', pitch: 0 }, { name: 'CHASE', pitch: 62 }, { name: 'ORBIT', pitch: 55 }];
-let map = null, mapReady = false, viewMode = 1;
+let map = null, mapReady = false, viewMode = 1, terrainOn = true, planeT = 0;
+try { terrainOn = localStorage.getItem('sr.terrain') !== '0'; } catch (_) {}
+function setTerrainOn(on) { terrainOn = on; try { localStorage.setItem('sr.terrain', on ? '1' : '0'); } catch (_) {} if (map) { applyMode(); planeT = 0; } }
 const KCOL = { B: '#1d5fae', D: '#1d5fae', R: '#1d5fae', P: '#1d5fae', SFRA: '#1d5fae', FRZ: '#c9a21a', MOA: '#a8327f', W: '#a8327f', A: '#a8327f', E2: '#a8327f', E5: '#a8327f', MODEC: '#a8327f' };
 const fc = feats => ({ type: 'FeatureCollection', features: feats });
 const ringLL = r => { const c = r.map(([x, y]) => toLL(x, y)); c.push(c[0]); return c; };
@@ -77,7 +79,7 @@ function addLayers() {
   map.addSource('vol3', { type: 'geojson', data: fc(ruled.map(volFeat)) });
   map.addSource('vlab', { type: 'geojson', data: fc(VOL.map(v => pt(v.lp[0], v.lp[1], { t: volLabel(v), col: KCOL[v.k], k: v.k })).filter(f => f.properties.t)) });
   map.addSource('route', { type: 'geojson', data: fc([line([[START.x, START.y], [DEST.x, DEST.y]])]) });
-  map.addSource('aps', { type: 'geojson', data: fc(AIRPORTS.map(a => pt(a.x, a.y, { t: `${a.n.toUpperCase().replace(/\/.*$/, '')} (${a.id})\n${a.tw ? 'CT ★ · ' : ''}${a.e}`, col: a.tw ? '#1d5fae' : '#a8327f', dest: a === DEST ? 1 : 0 }))) });
+  map.addSource('aps', { type: 'geojson', data: fc(AIRPORTS.map(a => pt(a.x, a.y, { t: `${a.n.toUpperCase().replace(/\/.*$/, '')} (${a.id})\n${AP_FREQ[a.id] ? AP_FREQ[a.id] + (a.tw ? ' ★' : '') + ' · ' : a.tw ? 'CT ★ · ' : ''}${a.e}`, col: a.tw ? '#1d5fae' : '#a8327f', dest: a === DEST ? 1 : 0 }))) });
   map.addSource('obs', { type: 'geojson', data: fc(TOWERS.map(t => pt(t.x, t.y, { t: `${t.m}\n(${t.a})`, l: t.l }))) });
   map.addSource('obs3', { type: 'geojson', data: fc(TOWERS.map(t => { const [lon, lat] = toLL(t.x, t.y), s = 45;
     return { type: 'Feature', properties: { h: t.a * FT * EX }, geometry: { type: 'Polygon', coordinates: [[metersLL(lon, lat, -s, -s), metersLL(lon, lat, s, -s), metersLL(lon, lat, s, s), metersLL(lon, lat, -s, s), metersLL(lon, lat, -s, -s)]] } }; })) });
@@ -158,7 +160,7 @@ function updatePlane() {
 }
 function applyMode() {
   const m = MODES[viewMode], three = viewMode !== 0;
-  if (map.getSource('dem')) map.setTerrain(three ? { source: 'dem', exaggeration: EX } : null);
+  if (map.getSource('dem')) map.setTerrain(three && terrainOn ? { source: 'dem', exaggeration: EX } : null);
   for (const id of ['x-sfra', 'x-moa', 'x-b', 'x-sua', 'x-d', 'obs3']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', three ? 'visible' : 'none');
   if (viewMode === 2) { map.dragRotate.enable(); map.touchZoomRotate.enableRotation(); map.touchPitch.enable(); }
   else { map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.touchPitch.disable(); }
@@ -183,7 +185,8 @@ toggleChart = function () { cam.chart = !cam.chart; map.setLayoutProperty('tac',
 zoom = function (f) { map.easeTo({ zoom: map.getZoom() + Math.log2(f) * 1.2, duration: 250 }); };
 render = function () {
   if (!mapReady || !pl) return;
-  updateCamera(); updatePlane();
+  updateCamera();
+  const now = performance.now(); if (now - planeT > 50) { planeT = now; updatePlane(); }   // ~20 Hz: rebuilding the plane geometry every frame is the costliest part
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
   drawHUD();
 };
@@ -191,6 +194,7 @@ render = function () {
   const c = toLL(START.x, START.y);
   fetch('https://tiles.openfreemap.org/styles/positron').then(r => r.json()).then(style => {
     map = new maplibregl.Map({ container: 'map', style: sectionalTint(style), center: c, zoom: 10.3, pitch: 62, bearing: 112, maxPitch: 78, dragPan: false, keyboard: false,
+      pixelRatio: Math.min(devicePixelRatio || 1, 1.5),   // full Retina resolution costs a lot of GPU for little gain here
       attributionControl: { compact: true }, fadeDuration: 0 });
     map.on('load', () => { addLayers(); mapReady = true; mapReadyHook(); });
     map.on('click', e => info(e.point.x, e.point.y));

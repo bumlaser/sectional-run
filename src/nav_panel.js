@@ -12,7 +12,8 @@
  *   fpl     [{ id, name, dtk, dis, active }]          legs in order (the first entry is the departure, with no dtk/dis)
  *   nearest [{ id, name, dis, brg, tw }]              closest airports first (tw = towered)
  *   map     { range, items: [{ id, dx, dy, tw }], leg: [[dx0, dy0], [dx1, dy1]], hdg }   nm offsets from ownship, +x east, +y south
- *   com     { active, standby } · navaid { id, name, dis, brg } · utils [{ id, label, value }]
+ *   com     { active: { freq, name }, standby: { freq, name } }   freq as '132.400'; shown in the header box
+ *   navaid  { id, name, dis, brg } · utils [{ id, label, value }]
  */
 (function () {
   'use strict';
@@ -27,19 +28,26 @@
   .np-grip { width:44px; height:6px; border-radius:3px; background:repeating-linear-gradient(90deg,#4a5158 0 3px,transparent 3px 6px); }
   .np-brand { font:bold 9px "Courier New",monospace; letter-spacing:2px; color:#7d8892; }
   .np-close { width:22px; height:18px; border:1px solid #000; border-radius:4px; background:#23272b; color:#9aa6b0; font:bold 12px/1 "Courier New",monospace; cursor:pointer; padding:0; box-shadow:none; }
-  .np-screen { display:grid; grid-template-columns:74px minmax(0,1fr); grid-template-rows:100%; height:330px; background:#04080b; border:3px solid #000; border-radius:4px; overflow:hidden;
+  .np-screen { display:grid; grid-template-columns:80px minmax(0,1fr); grid-template-rows:100%; height:330px; background:#04080b; border:3px solid #000; border-radius:4px; overflow:hidden;
     box-shadow:0 0 0 1px #2f363c, inset 0 0 18px rgba(0,0,0,.9); }
-  .np-strip { display:grid; grid-template-rows:repeat(4,minmax(0,1fr)); min-height:0; border-right:1px solid #1d2a33; background:#060d12; }
-  .np-cell { display:flex; flex-direction:column; justify-content:center; padding:0 7px; border-bottom:1px solid #12202a; }
-  .np-cell:last-child { border-bottom:0; }
+  .np-strip { display:grid; grid-template-rows:repeat(4,minmax(0,1fr)); gap:5px; min-height:0; padding:5px; border-right:1px solid #1d2a33; background:#060d12; }
+  .np-cell { display:flex; flex-direction:column; justify-content:center; padding:0 6px; min-height:0; border:1px solid #24343f; border-radius:5px;
+    background:linear-gradient(180deg,#03080b,#08131a); box-shadow:inset 0 2px 4px rgba(0,0,0,.85), inset 0 -1px 0 rgba(255,255,255,.04), 0 1px 0 rgba(255,255,255,.03); }
+  .np-cell b { font-size:16px !important; }
   .np-cell small { font:bold 10px "Courier New",monospace; color:#4fd1e8; letter-spacing:1px; }
   .np-cell b { font:bold 17px "Courier New",monospace; color:#f2f6f8; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .np-cell i { font:normal 9px "Courier New",monospace; color:#7c8a94; font-style:normal; }
   .np-cell.np-mag b { color:#ff4fd8; }
   .np-main { display:flex; flex-direction:column; min-width:0; min-height:0; }
-  .np-title { display:flex; align-items:center; justify-content:space-between; height:24px; padding:0 8px; background:#0c1820; border-bottom:1px solid #1d2a33;
+  .np-title { display:flex; align-items:center; justify-content:space-between; gap:6px; height:38px; padding:0 4px 0 8px; background:#0c1820; border-bottom:1px solid #1d2a33;
     font:bold 11px "Courier New",monospace; letter-spacing:1px; color:#bcd0dc; }
-  .np-title .np-wpt { color:#ff4fd8; }
+  .np-title [data-title] { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .np-freq { display:grid; grid-template-rows:1fr 1fr; flex:none; padding:2px 6px; border:1px solid #2a3c48; border-radius:4px; background:#03070a;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.8); font-family:"Courier New",monospace; line-height:1.05; }
+  .np-f { display:flex; align-items:baseline; justify-content:flex-end; gap:5px; }
+  .np-f i { font-style:normal; font-size:8px; letter-spacing:.5px; color:#5d7280; }
+  .np-f b { font-size:13px; font-variant-numeric:tabular-nums; letter-spacing:.5px; }
+  .np-f.np-act b { color:#39ff6a; text-shadow:0 0 6px rgba(57,255,106,.35); } .np-f.np-sby b { color:#d8e2e8; font-size:12px; }
   .np-page { flex:1; min-height:0; overflow:auto; padding:8px; scrollbar-width:thin; }
   .np-grid { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(3,1fr); gap:8px; height:100%; }
   .np-key { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; border-radius:8px; cursor:pointer;
@@ -60,6 +68,17 @@
   .np-kv { display:grid; grid-template-columns:auto 1fr; gap:4px 10px; font:12px "Courier New",monospace; padding:4px 2px; }
   .np-kv span { color:#4fd1e8; } .np-kv b { color:#f2f6f8; }
   .np-canvas { width:100%; height:100%; display:block; }
+  .np-page.np-mappage { padding:0; overflow:hidden; }
+  .np-mapwrap { position:relative; width:100%; height:100%; }
+  .np-mwpt { position:absolute; top:6px; right:6px; padding:3px 7px; border:1px solid rgba(255,79,216,.55); border-radius:4px; background:rgba(4,8,11,.55);
+    font:bold 12px "Courier New",monospace; color:#ff4fd8; line-height:1.15; text-align:right; pointer-events:none; }
+  .np-mwpt i { display:block; font-style:normal; font-size:9px; color:#c5d2da; }
+  .np-mrng { position:absolute; left:6px; bottom:6px; font:bold 10px "Courier New",monospace; color:#4fd1e8; background:rgba(4,8,11,.55); padding:2px 5px; border-radius:3px; pointer-events:none; }
+  .np-zoom { position:absolute; right:6px; bottom:6px; display:flex; flex-direction:column; border:1px solid #2c4252; border-radius:14px; overflow:hidden;
+    background:rgba(12,24,32,.85); box-shadow:0 2px 0 #000; }
+  .np-zoom button { width:30px; height:28px; border:0; margin:0; padding:0; background:transparent; color:#dfe8ee; font:bold 17px/1 "Courier New",monospace; cursor:pointer; box-shadow:none; }
+  .np-zoom button + button { border-top:1px solid #2c4252; }
+  .np-zoom button:active { background:#24506a; }
   .np-keys { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
   .np-hw { height:34px; border-radius:7px; border:2px solid #000; cursor:pointer; color:#cfd8de; font:bold 13px "Courier New",monospace;
     background:linear-gradient(180deg,#3a4147,#24292d); box-shadow:0 3px 0 #000, inset 0 1px 0 rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; gap:6px; padding:0; }
@@ -84,7 +103,7 @@
 
   class NavPanel {
     constructor(opts = {}) {
-      this.opts = opts; this.data = {}; this.page = 'home'; this.lastHtml = '';
+      this.opts = opts; this.data = {}; this.page = 'home'; this.lastHtml = ''; this.ranges = [2, 5, 10, 20, 40]; this.ri = 3;
       if (!document.getElementById('np-style')) { const st = document.createElement('style'); st.id = 'np-style'; st.textContent = CSS; document.head.appendChild(st); }
       const el = this.el = document.createElement('div'); el.className = 'np-root'; el.setAttribute('role', 'region'); el.setAttribute('aria-label', 'Navigator');
       el.innerHTML = `<div class="np-bezel">
@@ -96,7 +115,11 @@
               <div class="np-cell np-mag"><small>DIS</small><b data-k="dis">--.-</b><i>NM</i></div>
               <div class="np-cell np-mag"><small>DTK</small><b data-k="dtk">---°</b><i>MAG</i></div>
             </div>
-            <div class="np-main"><div class="np-title"><span data-title>HOME</span><span class="np-wpt" data-wpt></span></div><div class="np-page" data-page></div></div>
+            <div class="np-main">
+              <div class="np-title"><span data-title>HOME</span>
+                <div class="np-freq" aria-label="COM frequencies"><div class="np-f np-act" data-fa-name><i>COM</i><b data-fa>---.---</b></div><div class="np-f np-sby" data-fs-name><i>STBY</i><b data-fs>---.---</b></div></div>
+              </div>
+              <div class="np-page" data-page></div></div>
           </div>
           <div class="np-keys">
             <button class="np-hw" type="button" data-hw="home" aria-label="Home">${ICON.home}<span>HOME</span></button>
@@ -118,7 +141,9 @@
       const s = this.strip;
       s.gs.textContent = d.gs == null ? '---' : Math.round(d.gs); s.trk.textContent = f3(d.trk) + '°';
       s.dis.textContent = fd(d.dis); s.dtk.textContent = f3(d.dtk) + '°';
-      this.$('[data-wpt]').textContent = d.wpt ? (d.direct ? 'D→ ' : '') + d.wpt : '';
+      const c = this.data.com || {}, a = c.active || {}, sb = c.standby || {};
+      this.$('[data-fa]').textContent = a.freq || '---.---'; this.$('[data-fs]').textContent = sb.freq || '---.---';
+      this.$('[data-fa-name]').title = a.name || ''; this.$('[data-fs-name]').title = sb.name || '';
       this.render();
     }
     show() { this.el.hidden = false; this.place(); this.render(true); }
@@ -135,7 +160,8 @@
     }
     // ---- internals ----
     _click(e) {
-      const t = e.target.closest('[data-close],[data-hw],[data-go],[data-dto],[data-act]'); if (!t) return;
+      const t = e.target.closest('[data-close],[data-hw],[data-go],[data-dto],[data-act],[data-zoom]'); if (!t) return;
+      if (t.dataset.zoom) { this.ri = Math.max(0, Math.min(this.ranges.length - 1, this.ri + (t.dataset.zoom === '+' ? -1 : 1))); return this._drawMap(); }
       if (t.hasAttribute('data-close')) return this.hide();
       if (t.dataset.hw === 'home') return this.go('home');
       if (t.dataset.hw === 'direct') return this.go('direct');
@@ -154,7 +180,13 @@
       if (this.el.hidden) return;
       const d = this.data, P = this.page, title = { home: 'HOME', direct: 'DIRECT-TO', map: 'MAP', fpl: 'FLIGHT PLAN', proc: 'PROCEDURES', navcom: 'NAV / COM', nearest: 'NEAREST AIRPORT', utilities: 'UTILITIES' }[P];
       this.$('[data-title]').textContent = title;
-      if (P === 'map') { if (force || !this.canvas) { this.$('[data-page]').innerHTML = '<canvas class="np-canvas"></canvas>'; this.canvas = this.$('canvas'); this.lastHtml = ''; } return this._drawMap(); }
+      const pg = this.$('[data-page]'); pg.classList.toggle('np-mappage', P === 'map');
+      if (P === 'map') {
+        if (force || !this.canvas) { pg.innerHTML = `<div class="np-mapwrap"><canvas class="np-canvas"></canvas><div class="np-mwpt" data-mwpt></div><div class="np-mrng" data-mrng></div>
+          <div class="np-zoom" role="group" aria-label="Map range"><button type="button" data-zoom="+" aria-label="Zoom in">+</button><button type="button" data-zoom="-" aria-label="Zoom out">−</button></div></div>`;
+          this.canvas = this.$('canvas'); this.lastHtml = ''; }
+        const w = this.$('[data-mwpt]'); w.innerHTML = d.wpt ? `${d.direct ? 'D→ ' : ''}${esc(d.wpt)}<i>${fd(d.dis)} NM · ${f3(d.dtk)}°</i>` : '';
+        return this._drawMap(); }
       this.canvas = null;
       let html = '';
       if (P === 'home') html = `<div class="np-grid">${PAGES.map(([k, l]) => `<button class="np-key" type="button" data-go="${k}">${ICON[k]}<span>${l}</span></button>`).join('')}</div>`;
@@ -174,12 +206,13 @@
           <div class="np-note">Tap an airport to go direct. <span class="np-tw">Blue</span> = towered, <span class="np-ntw">magenta</span> = CTAF.</div>`;
       } else if (P === 'navcom') {
         const c = d.com || {}, n = d.navaid || {};
-        html = `<div class="np-kv"><span>COM ACT</span><b>${esc(c.active || '—')}</b><span>COM STBY</span><b>${esc(c.standby || '—')}</b>
+        const ca = c.active || {}, cs = c.standby || {};
+        html = `<div class="np-kv"><span>COM ACT</span><b><span style="color:#39ff6a">${esc(ca.freq || '---.---')}</span> ${esc(ca.name || '')}</b><span>COM STBY</span><b>${esc(cs.freq || '---.---')} ${esc(cs.name || '')}</b>
           <span>NAV</span><b>${n.id ? esc(n.id) + ' ' + esc(n.name || '') : '—'}</b><span>BRG / DIS</span><b>${n.id ? f3(n.brg) + '° · ' + fd(n.dis) + ' NM' : '—'}</b></div>
           <div class="np-note">Use the RADIO button to call a facility. The last one you called shows here as active.</div>`;
       } else if (P === 'proc') html = `<div class="np-note">No procedures are loaded for a VFR flight.<br><br>Departures, arrivals and approaches will show here when IFR mode arrives.</div>`;
       else if (P === 'utilities') html = `<div class="np-list">${(d.utils || []).map(u => `<button class="np-row np-tap" type="button" data-act="${esc(u.id)}"><span><b>${esc(u.label)}</b></span><span></span><span class="np-num">${esc(u.value)}</span></button>`).join('')}</div>`;
-      if (force || html !== this.lastHtml) { const pg = this.$('[data-page]'), sc = pg.scrollTop; pg.innerHTML = html; pg.scrollTop = sc; this.lastHtml = html; }
+      if (force || html !== this.lastHtml) { const sc = pg.scrollTop; pg.innerHTML = html; pg.scrollTop = sc; this.lastHtml = html; }
     }
     _drawMap() {
       const cv = this.canvas, d = this.data.map; if (!cv) return;
@@ -187,10 +220,10 @@
       if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
       const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#04080b'; g.fillRect(0, 0, w, h);
       if (!d) return;
-      const R = d.range || 20, cx = w / 2, cy = h * .62, k = (Math.min(w, h) * .55) / R, rot = -(d.hdg || 0) * Math.PI / 180;   // track-up
+      const R = this.ranges[this.ri], cx = w / 2, cy = h * .62, k = (Math.min(w, h) * .55) / R, rot = -(d.hdg || 0) * Math.PI / 180;   // track-up
+      const rl = this.$('[data-mrng]'); if (rl) rl.textContent = R + ' NM';
       const toS = (dx, dy) => { const x = dx * Math.cos(rot) - dy * Math.sin(rot), y = dx * Math.sin(rot) + dy * Math.cos(rot); return [cx + x * k, cy + y * k]; };
       g.strokeStyle = '#1d3a48'; g.lineWidth = 1; for (const r of [R / 2, R]) { g.beginPath(); g.arc(cx, cy, r * k, 0, 6.283); g.stroke(); }
-      g.fillStyle = '#4d6b7a'; g.font = '9px "Courier New",monospace'; g.fillText(R / 2 + ' NM', cx + 4, cy - R / 2 * k - 3);
       if (d.leg) { const [a, b] = [toS(...d.leg[0]), toS(...d.leg[1])]; g.strokeStyle = '#ff4fd8'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
       for (const it of d.items || []) { const [x, y] = toS(it.dx, it.dy); if (x < -10 || y < -10 || x > w + 10 || y > h + 10) continue;
         g.strokeStyle = it.tw ? '#5aa0ff' : '#ff4fd8'; g.lineWidth = 1.6; g.beginPath(); g.arc(x, y, 4, 0, 6.283); g.stroke();
