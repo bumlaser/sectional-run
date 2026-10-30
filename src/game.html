@@ -119,7 +119,7 @@
 'use strict';
 const WD = __WORLD__;
 // Feature switches. Parked features keep their code; flip one to true to bring it back.
-const FEATURES = { nav: false, six: false, info: false, traffic: false };
+const FEATURES = { nav: true, six: false, info: false, traffic: false };
 const TAC_SRC = '__TAC__';
 // ====================================================================
 //  Helpers
@@ -722,7 +722,7 @@ function navData() {
   return {
     gs: TAS, trk: norm(pl.hdg + VAR), dis: d2(wp), dtk: norm(brg(o[0], o[1], wp.x, wp.y) + VAR), wpt: wp.id, direct: N.direct, fpl, nearest: near,
     map: { range: 20, hdg: pl.hdg, items: AIRPORTS.filter(a => d2(a) < 30).map(a => ({ id: a.id, dx: a.x - pl.x, dy: a.y - pl.y, tw: !!a.tw })), leg: [[o[0] - pl.x, o[1] - pl.y], [wp.x - pl.x, wp.y - pl.y]] },
-    com: { active: { name: game.lastFac, freq: FREQ[game.lastFac] }, standby: stby ? { name: stby.name, freq: FREQ[stby.name] } : { name: 'Guard', freq: FREQ.Guard } }, navaid: vor, nav: { active: vf(vors[0]), standby: vf(vors[1]) }, msgs: game.radioLog,
+    com: { active: { name: game.lastFac, freq: FREQ[game.lastFac] }, standby: stby ? { name: stby.name, freq: FREQ[stby.name] } : { name: 'Guard', freq: FREQ.Guard } }, xpdr: { code: game.contact.B ? '4211' : '1200', mode: 'ALT' }, phase: d2(START) < 30 || d2(DEST) < 30 ? 'TERM' : 'ENR', navaid: vor, nav: { active: vf(vors[0]), standby: vf(vors[1]) }, msgs: game.radioLog,
     tfc: FEATURES.traffic && typeof setTraffic === 'function' ? { on: TRAFFIC.on, status: TRAFFIC.status } : null,
     utils: [{ id: 'bugdtk', label: 'Heading bug to DTK', value: hdg3(norm(brg(o[0], o[1], wp.x, wp.y) + VAR)) + '°' }, ...(typeof terrainOn !== 'undefined' ? [{ id: 'terrain', label: '3D terrain', value: terrainOn ? 'ON' : 'OFF' }] : []), { id: 'quiz', label: 'Checkride questions', value: quizOn ? 'ON' : 'OFF' }, ...(FEATURES.traffic && typeof setTraffic === 'function' ? [{ id: 'traffic', label: 'Live traffic (ADS-B)', value: TRAFFIC.on ? TRAFFIC.status.toUpperCase() : 'OFF' }] : []), { id: 'speed', label: 'Sim speed', value: simRate + '×' }, { id: 'view', label: 'Camera / view', value: 'CYCLE' }, { id: 'fpl', label: 'Restore flight plan', value: `${START.id}→${DEST.id}` }],
   };

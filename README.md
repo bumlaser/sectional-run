@@ -30,13 +30,19 @@ nav.update({ gs, trk, dis, dtk, wpt, direct, fpl, nearest, map, com, nav, msgs, 
 // com / nav: { active: { freq: "128.700", name }, standby: { freq, name } } feed the header rows
 ```
 
-Inside the screen there are three bands:
-- **Header (15% of the height):** active COM and NAV in green, then standby COM and NAV, then a pill naming the
-  current page.
-- **Body:** a 25%-wide column of four square GS/TRK/DIS/DTK blocks, with the page area in the other 75%. The page
-  area opens on a 2×3 home grid: Map, FPL, Proc, Nav/Com, Nearest, Utilities.
-- **Command bar (12%):** MSG, which shows the radio log and badges new messages, and TFC, which toggles live
-  traffic and appears only in the 3D build. On the right are Direct-To and a highlighted HOME.
+It's a landscape panel-mount unit.
+- **Bezel:** knobs (drag any of them to move the unit), plus HOME and Direct-To keys.
+- **Screen, left to right:**
+  - **Key column:** Menu and Back, with a new-message notice between them.
+  - **Moving map (track-up):** DTK and TRK laid over the top corners, the active waypoint, the distance to it,
+    and the range.
+  - **Radio column:** COM (green), STBY (cyan), the transponder (1200, or 4211 once Potomac assigns it), and zoom
+    In / Out.
+- **Status strip:** MSG, the flight phase (TERM or ENR) and the nav source (GPS).
+
+Menu opens a grid of pages that replace the map: Map, Flight Plan, Nearest, Nav / Com, Procedures, Messages,
+Utilities, and Traffic when it's enabled. Back steps through the pages you've visited. On a phone the unit scales to
+the screen width and sits just above the flight controls.
 
 NAV shows the nearest VOR as active and the next nearest in standby. Their frequencies come from the FAA
 NavaidComponents layer. In the game, `navData()` in `src/game.html` is the adapter that builds the update from the
@@ -86,7 +92,7 @@ The HDG knob works in both modes.
 ## Feature switches and parked features
 
 `FEATURES` near the top of `src/game.html` switches parked features off without deleting them:
-`{ nav: false, six: false, info: false, traffic: false }`. Those are the navigator, the six-pack/glass
+`{ nav: true, six: false, info: false, traffic: false }`. Those are the navigator (back on), the six-pack/glass
 instruments, tap-for-info and live traffic. Set one to `true` and rebuild to bring it back.
 
 The **AIR** button (or the A key) shows and hides the airspace drawing. The airspace rules always apply, hidden
