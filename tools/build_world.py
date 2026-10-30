@@ -79,7 +79,22 @@ for f in json.load(open(D + 'airports.geojson'))['features']:
     p = f['properties']; lon, lat = f['geometry']['coordinates'][:2]; x, y = nm_xy(lat, lon)
     if not inreg(x, y) or p['TYPE_CODE'] != 'AD' or p['PRIVATEUSE'] != 0 or p['OPERSTATUS'] != 'OPERATIONAL': continue
     tw = p['IDENT'] in dlinks or p['IDENT'] in ('BWI', 'DCA', 'IAD', 'ADW')
-    aps.append({'id': p['IDENT'], 'n': p['NAME'], 'x': round(x, 2), 'y': round(y, 2), 'e': round(p['ELEVATION'] or 0), 'tw': 1 if tw else 0, 'mil': 1 if p['MIL_CODE'] != 'CIVIL' else 0})
+    aps.append({'id': p['IDENT'], 'n': p['NAME'], 'x': round(x, 2), 'y': round(y, 2), 'e': round(p['ELEVATION'] or 0), 'tw': 1 if tw else 0, 'mil': 1 if p['MIL_CODE'] != 'CIVIL' else 0, 'gid': p['GLOBAL_ID'], 'rw': []})
+# runways: centreline from each runway outline (FAA ADDS Runways layer)
+bygid = {a['gid']: a for a in aps}
+try: rws = json.load(open(D + 'runways.geojson'))['features']
+except FileNotFoundError: rws = []
+for f in rws:
+    p = f['properties']; a = bygid.get(p['AIRPORT_ID'])
+    if not a or not f['geometry']: continue
+    ring = [list(nm_xy(q[1], q[0])) for q in rings(f['geometry'])[0]]
+    if ring[0] == ring[-1]: ring = ring[:-1]
+    cx = sum(q[0] for q in ring) / len(ring); cy = sum(q[1] for q in ring) / len(ring)
+    best = max(((ring[i], ring[(i + 1) % len(ring)]) for i in range(len(ring))), key=lambda e: math.hypot(e[1][0] - e[0][0], e[1][1] - e[0][1]))
+    dx, dy = best[1][0] - best[0][0], best[1][1] - best[0][1]; L = math.hypot(dx, dy) or 1; ux, uy = dx / L, dy / L
+    half = (p['LENGTH'] or L * 6076) / 6076.1 / 2
+    a['rw'].append([round(cx - ux * half, 3), round(cy - uy * half, 3), round(cx + ux * half, 3), round(cy + uy * half, 3), int(p['LENGTH'] or 0), int(p['WIDTH'] or 0), p['DESIGNATOR'], (p['COMP_CODE'] or '')[:4]])
+for a in aps: del a['gid']
 # obstacles: tallest per ~1.5 nm cell, 400 ft AGL and up
 cells = {}
 for f in json.load(open(D + 'obstacles.geojson'))['features']:

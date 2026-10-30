@@ -10,11 +10,17 @@ from FAA ADDS data. Water and towns are traced from the FAA Baltimore–Washingt
 swapped in as the map layer. The SFRA and FRZ are approximate rings, and ground heights are estimated from airport
 elevations. **Not for navigation.**
 
+**`3d/`: the MapLibre version.** It uses OpenFreeMap vector tiles (Positron, retinted toward sectional colors),
+draws the FAA airspace as real 3D slabs at 2× vertical scale, and has a camera that rotates and pitches:
+chase (track-up), orbit (drag or two-finger twist and tilt), or flat 2D. It needs a network connection for tiles.
+Base map © OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors.
+
 **`fictional.html`: the first prototype**, on an invented chart.
 
 ## Building
 
-`index.html` is generated, so edit `src/game.html` and run `python3 tools/build_page.py` from the repo root.
+`index.html` and `3d/index.html` are generated, so edit `src/game.html` (game logic, shared) and `src/map_layer.js`
+(the MapLibre renderer), then run `python3 tools/build_page.py` from the repo root.
 To refresh the data, run `tools/fetch_faa.py` (FAA layers), `tools/masks.py` (water and town mask plus the
 reprojected TAC, which needs the TAC GeoTIFF) and `tools/build_world.py` (`data/derived/world.json`). The scripts expect
 the chart GeoTIFFs in a local `charts/` folder; they aren't committed.

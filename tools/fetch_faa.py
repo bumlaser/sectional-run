@@ -12,6 +12,7 @@ LAYERS = {
   'airports': ('US_Airport', '1=1'),
   'navaids': ('NAVAIDSystem', '1=1'),
   'obstacles': ('Digital_Obstacle_File', 'AGL >= 300'),
+  'runways': ('Runways', '1=1'),
 }
 def get(url):
     for attempt in range(6):

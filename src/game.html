@@ -471,7 +471,14 @@ function drawAirports() {
     ctx.save(); ctx.translate(x, y); ctx.scale(1, cam.T); const rr = big ? 13 : 9;
     ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(0, 0, rr, 0, 6.283); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, rr, 0, 6.283); ctx.stroke();
     for (let k = 0; k < 6; k++) { const an = k * Math.PI / 3; ctx.beginPath(); ctx.moveTo(Math.cos(an) * rr, Math.sin(an) * rr); ctx.lineTo(Math.cos(an) * (rr + 4), Math.sin(an) * (rr + 4)); ctx.stroke(); }
-    ctx.fillStyle = col; ctx.save(); ctx.rotate((hash2(a.x * 10 | 0, a.y * 10 | 0, 3) * 180) * D2R); ctx.fillRect(-1.5, -rr + 3, 3, rr * 2 - 6); ctx.restore(); ctx.restore();
+    // runway layout from FAA data, scaled to fit inside the symbol (as on a sectional)
+    const rws = (a.rw || []).filter(r => !/^H/.test(r[6]));
+    let ext = 1e-6; for (const r of rws) ext = Math.max(ext, Math.hypot(r[0] - a.x, r[1] - a.y), Math.hypot(r[2] - a.x, r[3] - a.y));
+    const k = (rr - 3) / ext; ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.lineCap = 'butt';
+    for (const r of rws) { ctx.beginPath(); ctx.moveTo((r[0] - a.x) * k, (r[1] - a.y) * k); ctx.lineTo((r[2] - a.x) * k, (r[3] - a.y) * k); ctx.stroke(); }
+    ctx.restore();
+    // true-scale runways when zoomed well in
+    if (cam.s > 70) for (const r of rws) { const [p0, p1] = [P(r[0], r[1]), P(r[2], r[3])]; ctx.strokeStyle = 'rgba(60,62,66,.9)'; ctx.lineWidth = Math.max(2.5, r[5] / 6076 * cam.s); ctx.beginPath(); ctx.moveTo(...p0); ctx.lineTo(...p1); ctx.stroke(); }
     if ((cam.s > 10 || big || a === DEST || a === START) && (cam.hz < .001 || d2(a) < 12 || a === DEST)) { const nm = a.n.toUpperCase().replace(/\/.*$/, '');
       label(`${nm} (${a.id})`, x + rr + 6, y - 6, col, 11, '900', 'left'); label(`${a.tw ? 'CT ★ · ' : ''}${a.e} ft`, x + rr + 6, y + 7, col, 10, 'bold', 'left'); }
     if (a === DEST) { ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.ellipse(x, y, 24, 24 * cam.T, 0, 0, 6.283); ctx.stroke(); ctx.setLineDash([]); } }
@@ -570,7 +577,7 @@ function togglePause() { paused = !paused; document.getElementById('bPause').tex
 const holdBtn = (id, k) => { const b = document.getElementById(id); const on = e => { e.preventDefault(); hold[k] = true; b.classList.add('on'); }, off = () => { hold[k] = false; b.classList.remove('on'); }; b.addEventListener('pointerdown', on); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, off); };
 holdBtn('bLeft', 'left'); holdBtn('bRight', 'right');
 const tap = (id, f) => document.getElementById(id).addEventListener('click', f);
-tap('bUp', () => setTgt(500)); tap('bDown', () => setTgt(-500)); tap('bRadio', () => running && !game.over && openRadio()); tap('bView', toggleView); tap('bChart', toggleChart);
+tap('bUp', () => setTgt(500)); tap('bDown', () => setTgt(-500)); tap('bRadio', () => running && !game.over && openRadio()); tap('bView', () => toggleView()); tap('bChart', () => toggleChart());
 tap('bSpeed', cycleSpeed); tap('bZin', () => zoom(1.4)); tap('bZout', () => zoom(1 / 1.4)); tap('bPause', togglePause); tap('landBtn', land);
 document.getElementById('sheetCard').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.opt !== undefined) answerQuiz(+t.dataset.opt); else if (t.dataset.call) call(t.dataset.call); else if (t.hasAttribute('data-close')) closeSheet(); });
 function showSheet(on) { document.getElementById('sheet').hidden = !on; }

@@ -1,0 +1,182 @@
+// MapLibre renderer for Sectional Run: replaces the canvas map with OpenFreeMap vector tiles,
+// FAA airspace as extruded volumes, and a follow camera that can rotate and pitch.
+// The game logic (rules, quizzes, radio, HUD) is unchanged and still works in nm coordinates.
+'use strict';
+const EX = 2;                 // vertical exaggeration so the slabs read at map scale
+const FT = .3048, CAP = 12500;
+const toLL = (x, y) => [WD.reg.clon + x / (60 * WD.reg.cos), WD.reg.clat - y / 60];
+const fromLL = (lon, lat) => [(lon - WD.reg.clon) * 60 * WD.reg.cos, -(lat - WD.reg.clat) * 60];
+const MODES = [{ name: '2D', pitch: 0 }, { name: 'CHASE', pitch: 62 }, { name: 'ORBIT', pitch: 55 }];
+let map = null, mapReady = false, viewMode = 1;
+const KCOL = { B: '#1d5fae', D: '#1d5fae', R: '#1d5fae', P: '#1d5fae', SFRA: '#1d5fae', FRZ: '#c9a21a', MOA: '#a8327f', W: '#a8327f', A: '#a8327f', E2: '#a8327f', E5: '#a8327f', MODEC: '#a8327f' };
+const fc = feats => ({ type: 'FeatureCollection', features: feats });
+const ringLL = r => { const c = r.map(([x, y]) => toLL(x, y)); c.push(c[0]); return c; };
+const volFeat = v => ({ type: 'Feature', properties: { k: v.k, n: v.n, fl: v.fl, ce: Math.min(v.ce, CAP), col: KCOL[v.k] || '#1d5fae' }, geometry: { type: 'Polygon', coordinates: v.r.map(ringLL) } });
+const pt = (x, y, props) => ({ type: 'Feature', properties: props, geometry: { type: 'Point', coordinates: toLL(x, y) } });
+const line = (pts, props = {}) => ({ type: 'Feature', properties: props, geometry: { type: 'LineString', coordinates: pts.map(([x, y]) => toLL(x, y)) } });
+const metersLL = (lon, lat, dx, dy) => [lon + dx / (111320 * Math.cos(lat * D2R)), lat - dy / 110540];
+
+function volLabel(v) {
+  if (v.k === 'B') return `${label100(v.ce)}\n${label100(v.fl)}`;
+  if (v.k === 'D') return `[${label100(v.ce)}]`;
+  if (v.k === 'SFRA') return 'WASHINGTON DC SFRA\nSFC–FL180 (APPROX.)';
+  if (v.k === 'FRZ') return 'DC FRZ (APPROX.)';
+  if (v.k === 'R') return `${v.n}\n${v.fl ? fmt(v.fl) : 'SFC'}–${v.ce >= 60000 ? 'UNLTD' : fmt(v.ce)} ${SUA_STATUS[v.grp] ? 'HOT' : 'COLD'}`;
+  if (v.k === 'P') return `${v.n}\nSFC–${fmt(v.ce)}`;
+  if (v.k === 'MOA') return `${v.n}\n${fmt(v.fl)}–${fmt(v.ce)}`;
+  return '';
+}
+function vorRose(vr) {
+  const out = [], r = vr.r, c = [];
+  for (let d = 0; d <= 360; d += 5) { const a = (d - VAR - 90) * D2R; c.push([vr.x + Math.cos(a) * r, vr.y + Math.sin(a) * r]); }
+  out.push(line(c));
+  for (let d = 0; d < 360; d += 10) { const a = (d - VAR - 90) * D2R, l = d % 30 === 0 ? .9 : .4;
+    out.push(line([[vr.x + Math.cos(a) * r, vr.y + Math.sin(a) * r], [vr.x + Math.cos(a) * (r - l), vr.y + Math.sin(a) * (r - l)]])); }
+  const a = (-VAR - 90) * D2R; out.push(line([[vr.x, vr.y], [vr.x + Math.cos(a) * (r + 1), vr.y + Math.sin(a) * (r + 1)]]));
+  return out;
+}
+function sectionalTint(style) {
+  // Positron, recoloured toward sectional-chart tones
+  const set = (id, prop, v) => { const l = style.layers.find(l => l.id === id); if (l) { l.paint = l.paint || {}; l.paint[prop] = v; } };
+  set('background', 'background-color', '#dde8c6');
+  set('park', 'fill-color', '#cfe1b2');
+  set('landcover_wood', 'fill-color', '#bdd6a0'); set('landcover_wood', 'fill-opacity', ['interpolate', ['linear'], ['zoom'], 6, .5, 12, 1]);
+  set('landuse_residential', 'fill-color', '#f4df7c'); set('landuse_residential', 'fill-opacity', ['interpolate', ['linear'], ['zoom'], 6, .75, 12, .45]);
+  set('water', 'fill-color', '#a6d1ee'); set('waterway', 'line-color', '#86bde3');
+  set('building', 'fill-color', '#e2d6a6'); set('building', 'fill-outline-color', '#c9bc8a');
+  for (const l of style.layers) {
+    if (l.type === 'symbol' && l.paint) { l.paint['text-color'] = /water/.test(l.id) ? '#3d6f99' : '#38331f'; l.paint['text-halo-color'] = 'rgba(255,255,255,.85)'; }
+    if (/^highway_(major|motorway)_inner|bridge_inner/.test(l.id) && l.paint) l.paint['line-color'] = '#fdfbf3';
+    if (/casing/.test(l.id) && l.paint) l.paint['line-color'] = '#9d9580';
+  }
+  return style;
+}
+function addLayers() {
+  const [w0, n0] = toLL(WORLD.x0, WORLD.y0), [e0, s0] = toLL(WORLD.x1, WORLD.y1);
+  const firstSymbol = map.getStyle().layers.find(l => l.type === 'symbol')?.id;
+  map.addSource('tac', { type: 'image', url: TAC_SRC, coordinates: [[w0, n0], [e0, n0], [e0, s0], [w0, s0]] });
+  map.addLayer({ id: 'tac', type: 'raster', source: 'tac', layout: { visibility: 'none' }, paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 } }, firstSymbol);
+
+  const ruled = VOL.filter(v => RULED.includes(v.k));
+  map.addSource('vol', { type: 'geojson', data: fc(VOL.map(volFeat)) });
+  map.addSource('vol3', { type: 'geojson', data: fc(ruled.map(volFeat)) });
+  map.addSource('vlab', { type: 'geojson', data: fc(VOL.map(v => pt(v.lp[0], v.lp[1], { t: volLabel(v), col: KCOL[v.k], k: v.k })).filter(f => f.properties.t)) });
+  map.addSource('route', { type: 'geojson', data: fc([line([[START.x, START.y], [DEST.x, DEST.y]])]) });
+  map.addSource('aps', { type: 'geojson', data: fc(AIRPORTS.map(a => pt(a.x, a.y, { t: `${a.n.toUpperCase().replace(/\/.*$/, '')} (${a.id})\n${a.tw ? 'CT ★ · ' : ''}${a.e}`, col: a.tw ? '#1d5fae' : '#a8327f', dest: a === DEST ? 1 : 0 }))) });
+  map.addSource('obs', { type: 'geojson', data: fc(TOWERS.map(t => pt(t.x, t.y, { t: `${t.m}\n(${t.a})`, l: t.l }))) });
+  map.addSource('obs3', { type: 'geojson', data: fc(TOWERS.map(t => { const [lon, lat] = toLL(t.x, t.y), s = 45;
+    return { type: 'Feature', properties: { h: t.a * FT * EX }, geometry: { type: 'Polygon', coordinates: [[metersLL(lon, lat, -s, -s), metersLL(lon, lat, s, -s), metersLL(lon, lat, s, s), metersLL(lon, lat, -s, s), metersLL(lon, lat, -s, -s)]] } }; })) });
+  map.addSource('nav', { type: 'geojson', data: fc([...VORS.flatMap(vorRose), ...CHECKPOINTS.map(([n, x, y]) => pt(x, y, { t: n, cp: 1 })), ...VORS.map(v => pt(v.x, v.y, { t: `${v.n} ${v.id}`, vor: 1 }))]) });
+  // runways: true-scale outlines, plus a sectional-style layout drawn about 1 km around each airport for low zooms
+  const rwFeats = [], rwSym = [];
+  for (const a of AIRPORTS) {
+    const rws = (a.rw || []).filter(r => !/^H/.test(r[6])); let ext = 1e-6;
+    for (const r of rws) ext = Math.max(ext, Math.hypot(r[0] - a.x, r[1] - a.y), Math.hypot(r[2] - a.x, r[3] - a.y));
+    const k = .5 / ext;   // layout radius 0.5 nm
+    for (const r of rws) {
+      const dx = r[2] - r[0], dy = r[3] - r[1], L = Math.hypot(dx, dy) || 1, hw = r[5] / 6076.1 / 2, nx = -dy / L * hw, ny = dx / L * hw;
+      rwFeats.push({ type: 'Feature', properties: { d: r[6] }, geometry: { type: 'Polygon', coordinates: [ringLL([[r[0] + nx, r[1] + ny], [r[2] + nx, r[3] + ny], [r[2] - nx, r[3] - ny], [r[0] - nx, r[1] - ny]])] } });
+      rwSym.push(line([[a.x + (r[0] - a.x) * k, a.y + (r[1] - a.y) * k], [a.x + (r[2] - a.x) * k, a.y + (r[3] - a.y) * k]], { col: a.tw ? '#1d5fae' : '#a8327f' }));
+    }
+  }
+  map.addSource('rwy', { type: 'geojson', data: fc(rwFeats) });
+  map.addSource('rwysym', { type: 'geojson', data: fc(rwSym) });
+  map.addSource('plane', { type: 'geojson', data: fc([]) });
+  map.addSource('planeFx', { type: 'geojson', data: fc([]) });
+
+  // ground-level chart linework
+  map.addLayer({ id: 'e5', type: 'line', source: 'vol', filter: ['==', ['get', 'k'], 'E5'], paint: { 'line-color': '#a8327f', 'line-opacity': .35, 'line-width': 9, 'line-blur': 7 } });
+  map.addLayer({ id: 'frz-fill', type: 'fill', source: 'vol', filter: ['==', ['get', 'k'], 'FRZ'], paint: { 'fill-color': '#f5dd6a', 'fill-opacity': .22 } });
+  map.addLayer({ id: 'sua-hatch', type: 'line', source: 'vol', filter: ['in', ['get', 'k'], ['literal', ['R', 'P', 'MOA', 'W', 'A', 'SFRA']]],
+    paint: { 'line-color': ['get', 'col'], 'line-width': ['case', ['==', ['get', 'k'], 'SFRA'], 9, 7], 'line-dasharray': [.35, .8], 'line-opacity': .8 } });
+  map.addLayer({ id: 'vol-line', type: 'line', source: 'vol', filter: ['in', ['get', 'k'], ['literal', ['B', 'R', 'P', 'MOA', 'W', 'A', 'SFRA', 'MODEC']]],
+    paint: { 'line-color': ['get', 'col'], 'line-width': ['match', ['get', 'k'], 'B', 2.6, 'MODEC', 1.2, 'SFRA', 2.4, 1.6] } });
+  map.addLayer({ id: 'vol-dash', type: 'line', source: 'vol', filter: ['in', ['get', 'k'], ['literal', ['D', 'E2', 'FRZ']]],
+    paint: { 'line-color': ['get', 'col'], 'line-width': 2.2, 'line-dasharray': [3, 2] } });
+  map.addLayer({ id: 'route', type: 'line', source: 'route', paint: { 'line-color': '#a8327f', 'line-width': 3, 'line-opacity': .6, 'line-dasharray': [.5, 2] }, layout: { 'line-cap': 'round' } });
+  map.addLayer({ id: 'nav-line', type: 'line', source: 'nav', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#1d5fae', 'line-width': 1.2 } });
+
+  // 3D airspace, obstacles and plane
+  map.addLayer({ id: 'obs3', type: 'fill-extrusion', source: 'obs3', minzoom: 8.5, paint: { 'fill-extrusion-color': '#1b2c4a', 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': .9 } });
+  map.addLayer({ id: 'plane-shadow', type: 'fill', source: 'planeFx', filter: ['in', ['get', 'p'], ['literal', ['shadow', 'ring']]], paint: { 'fill-color': ['case', ['==', ['get', 'p'], 'ring'], '#ff6a13', '#000'], 'fill-opacity': ['case', ['==', ['get', 'p'], 'ring'], .85, .28] } });
+  map.addLayer({ id: 'plane-fx', type: 'fill-extrusion', source: 'planeFx', filter: ['!', ['in', ['get', 'p'], ['literal', ['shadow', 'ring']]]], paint: { 'fill-extrusion-color': ['get', 'col'], 'fill-extrusion-base': ['get', 'b'], 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': .85 } });
+  map.addLayer({ id: 'plane', type: 'fill-extrusion', source: 'plane', paint: { 'fill-extrusion-color': ['get', 'col'], 'fill-extrusion-base': ['get', 'b'], 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 1 } });
+
+  const ext = (id, kinds, opacity) => map.addLayer({ id, type: 'fill-extrusion', source: 'vol3', filter: ['in', ['get', 'k'], ['literal', kinds]],
+    paint: { 'fill-extrusion-color': ['get', 'col'], 'fill-extrusion-base': ['*', ['get', 'fl'], FT * EX], 'fill-extrusion-height': ['*', ['get', 'ce'], FT * EX], 'fill-extrusion-opacity': opacity } });
+  ext('x-sfra', ['SFRA', 'FRZ'], .07); ext('x-moa', ['MOA'], .1); ext('x-b', ['B'], .16); ext('x-sua', ['R', 'P'], .24); ext('x-d', ['D'], .22);
+  // symbols
+  const font = ['Noto Sans Bold'];
+  map.addLayer({ id: 'obs-pt', type: 'circle', source: 'obs', minzoom: 8, paint: { 'circle-radius': 3, 'circle-color': '#1b2c4a', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 } });
+  map.addLayer({ id: 'obs-lab', type: 'symbol', source: 'obs', minzoom: 9.5, layout: { 'text-field': ['get', 't'], 'text-font': font, 'text-size': 11, 'text-anchor': 'left', 'text-offset': [.6, 0], 'text-allow-overlap': false },
+    paint: { 'text-color': '#1b2c4a', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
+  map.addLayer({ id: 'rwy', type: 'fill', source: 'rwy', minzoom: 11, paint: { 'fill-color': '#4b4c50', 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 11.6, 1] } });
+  const apR = ['interpolate', ['exponential', 2], ['zoom'], 7, 1.8, 10, 10, 12, 40];   // matches a 0.6 nm ground radius
+  map.addLayer({ id: 'ap-pt', type: 'circle', source: 'aps', maxzoom: 11.6, paint: { 'circle-radius': apR, 'circle-color': 'rgba(255,255,255,.85)', 'circle-stroke-color': ['case', ['==', ['get', 'dest'], 1], '#ffcc33', ['get', 'col']], 'circle-stroke-width': ['case', ['==', ['get', 'dest'], 1], 4, 2.5], 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map' } });
+  map.addLayer({ id: 'rwysym', type: 'line', source: 'rwysym', maxzoom: 11.6, paint: { 'line-color': ['get', 'col'], 'line-width': ['interpolate', ['exponential', 2], ['zoom'], 7, 1, 10, 3, 11.6, 5] } });
+  map.addLayer({ id: 'ap-lab', type: 'symbol', source: 'aps', layout: { 'text-field': ['get', 't'], 'text-font': font, 'text-size': 11, 'text-anchor': 'left', 'text-offset': [1, 0], 'text-justify': 'left' },
+    paint: { 'text-color': ['get', 'col'], 'text-halo-color': '#fff', 'text-halo-width': 1.6 } });
+  map.addLayer({ id: 'nav-lab', type: 'symbol', source: 'nav', filter: ['==', ['geometry-type'], 'Point'], layout: { 'text-field': ['get', 't'], 'text-font': font, 'text-size': 10.5, 'text-offset': [0, 1.1] },
+    paint: { 'text-color': ['case', ['has', 'cp'], '#a8327f', '#1d5fae'], 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
+  map.addLayer({ id: 'vlab', type: 'symbol', source: 'vlab', layout: { 'text-field': ['get', 't'], 'text-font': font, 'text-size': ['match', ['get', 'k'], 'B', 13, 'D', 13, 12], 'text-line-height': 1.05, 'text-allow-overlap': false },
+    paint: { 'text-color': ['get', 'col'], 'text-halo-color': 'rgba(255,255,255,.9)', 'text-halo-width': 1.8 } });
+  applyMode();
+}
+const PLANE_SHAPE = [ // top view, metres for a 1-unit wingspan, nose toward -y
+  [[0, -.5], [.07, -.42], [.08, -.12], [.5, -.1], [.5, .02], [.07, .04], [.04, .36], [.2, .38], [.2, .46], [-.2, .46], [-.2, .38], [-.04, .36], [-.07, .04], [-.5, .02], [-.5, -.1], [-.08, -.12], [-.07, -.42]]];
+function planeGeom(lon, lat, span) {
+  const c = Math.cos(pl.hdg * D2R), s = Math.sin(pl.hdg * D2R);
+  return PLANE_SHAPE.map(r => { const ring = r.map(([x, y]) => metersLL(lon, lat, (x * c - y * s) * span, (x * s + y * c) * span)); ring.push(ring[0]); return ring; });
+}
+function updatePlane() {
+  const [lon, lat] = toLL(pl.x, pl.y), z = map.getZoom(), span = clamp(36 * Math.pow(2, 16.1 - z), 50, 9000), h = pl.alt * FT * EX;
+  map.getSource('plane').setData(fc([{ type: 'Feature', properties: { col: '#ff6a13', b: h, h: h + span * .12 }, geometry: { type: 'Polygon', coordinates: planeGeom(lon, lat, span) } }]));
+  const sq = span * .03, fx = [{ type: 'Feature', properties: { p: 'shadow' }, geometry: { type: 'Polygon', coordinates: planeGeom(lon, lat, span) } }];
+  const ring = (rad) => Array.from({ length: 33 }, (_, i) => metersLL(lon, lat, Math.cos(i / 32 * 6.283) * rad, Math.sin(i / 32 * 6.283) * rad));
+  fx.push({ type: 'Feature', properties: { p: 'ring' }, geometry: { type: 'Polygon', coordinates: [ring(span * .75), ring(span * .62).reverse()] } });
+  if (viewMode !== 0) fx.push({ type: 'Feature', properties: { p: 'drop', col: '#ff6a13', b: 0, h: h }, geometry: { type: 'Polygon', coordinates: [[metersLL(lon, lat, -sq, -sq), metersLL(lon, lat, sq, -sq), metersLL(lon, lat, sq, sq), metersLL(lon, lat, -sq, sq), metersLL(lon, lat, -sq, -sq)]] } });
+  const ahead = [pl.x + Math.sin(pl.hdg * D2R) * 4, pl.y - Math.cos(pl.hdg * D2R) * 4], [al, aa] = toLL(...ahead), steps = 12, w = span * .015;
+  for (let i = 0; i < steps; i += 2) { const f0 = i / steps, f1 = (i + 1) / steps, la = lon + (al - lon) * f0, lb = lon + (al - lon) * f1, ta = lat + (aa - lat) * f0, tb = lat + (aa - lat) * f1;
+    const nx = -Math.cos(pl.hdg * D2R) * w, ny = -Math.sin(pl.hdg * D2R) * w;
+    fx.push({ type: 'Feature', properties: { p: 'hdg', col: '#ffcc33', b: h, h: h + w * 2 }, geometry: { type: 'Polygon', coordinates: [[metersLL(la, ta, nx, ny), metersLL(lb, tb, nx, ny), metersLL(lb, tb, -nx, -ny), metersLL(la, ta, -nx, -ny), metersLL(la, ta, nx, ny)]] } }); }
+  map.getSource('planeFx').setData(fc(fx));
+}
+function applyMode() {
+  const m = MODES[viewMode], three = viewMode !== 0;
+  for (const id of ['x-sfra', 'x-moa', 'x-b', 'x-sua', 'x-d', 'obs3']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', three ? 'visible' : 'none');
+  if (viewMode === 2) { map.dragRotate.enable(); map.touchZoomRotate.enableRotation(); map.touchPitch.enable(); }
+  else { map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.touchPitch.disable(); }
+  if (viewMode !== 2) map.easeTo({ pitch: m.pitch, bearing: viewMode === 1 ? pl.hdg : 0, duration: 700 });
+  else map.easeTo({ pitch: m.pitch, duration: 700 });
+  document.getElementById('bView').textContent = m.name;
+}
+let camBusyUntil = 0;
+function updateCamera() {
+  if (performance.now() < camBusyUntil) return;
+  const c = toLL(pl.x, pl.y), opts = { center: c, padding: { top: viewMode === 0 ? 0 : Math.round(H * .3), bottom: 0, left: 0, right: 0 } };
+  if (viewMode === 1) { opts.bearing = pl.hdg; opts.pitch = MODES[1].pitch; }
+  if (viewMode === 0) { opts.bearing = 0; opts.pitch = 0; }
+  map.jumpTo(opts);
+}
+
+// --- hook the game's view functions --------------------------------------------------------
+P = function (x, y) { if (!map) return [0, 0]; const p = map.project(toLL(x, y)); return [p.x, p.y]; };
+unP = function (sx, sy) { const ll = map.unproject([sx, sy]); return fromLL(ll.lng, ll.lat); };
+toggleView = function () { viewMode = (viewMode + 1) % MODES.length; camBusyUntil = performance.now() + 750; applyMode(); };
+toggleChart = function () { cam.chart = !cam.chart; map.setLayoutProperty('tac', 'visibility', cam.chart ? 'visible' : 'none'); document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; };
+zoom = function (f) { map.easeTo({ zoom: map.getZoom() + Math.log2(f) * 1.2, duration: 250 }); };
+render = function () {
+  if (!mapReady || !pl) return;
+  updateCamera(); updatePlane();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
+  drawHUD();
+};
+(function initMap() {
+  const c = toLL(START.x, START.y);
+  fetch('https://tiles.openfreemap.org/styles/positron').then(r => r.json()).then(style => {
+    map = new maplibregl.Map({ container: 'map', style: sectionalTint(style), center: c, zoom: 10.3, pitch: 62, bearing: 112, maxPitch: 78, dragPan: false, keyboard: false,
+      attributionControl: { compact: true }, fadeDuration: 0 });
+    map.on('load', () => { addLayers(); mapReady = true; mapReadyHook(); });
+    map.on('click', e => info(e.point.x, e.point.y));
+  }).catch(err => { document.getElementById('startBtn').textContent = 'Map tiles unavailable'; console.error(err); });
+})();
