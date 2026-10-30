@@ -134,7 +134,7 @@ function addLayers() {
     paint: { 'text-color': '#1b2c4a', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
   map.addLayer({ id: 'rwy', type: 'fill', source: 'rwy', minzoom: 11, paint: { 'fill-color': '#4b4c50', 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 11.6, 1] } });
   const apR = ['interpolate', ['exponential', 2], ['zoom'], 7, 1.8, 10, 10, 12, 40];   // matches a 0.6 nm ground radius
-  map.addLayer({ id: 'ap-pt', type: 'circle', source: 'aps', maxzoom: 11.6, paint: { 'circle-radius': apR, 'circle-color': 'rgba(255,255,255,.85)', 'circle-stroke-color': ['case', ['==', ['get', 'dest'], 1], '#ffcc33', ['get', 'col']], 'circle-stroke-width': ['case', ['==', ['get', 'dest'], 1], 4, 2.5], 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map' } });
+  map.addLayer({ id: 'ap-pt', type: 'circle', source: 'aps', maxzoom: 11.6, paint: { 'circle-radius': apR, 'circle-color': 'rgba(255,255,255,.85)', 'circle-stroke-color': ['case', ['==', ['get', 'dest'], 1], '#FFD600', ['get', 'col']], 'circle-stroke-width': ['case', ['==', ['get', 'dest'], 1], 4, 2.5], 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map' } });
   map.addLayer({ id: 'rwysym', type: 'line', source: 'rwysym', maxzoom: 11.6, paint: { 'line-color': ['get', 'col'], 'line-width': ['interpolate', ['exponential', 2], ['zoom'], 7, 1, 10, 3, 11.6, 5] } });
   map.addLayer({ id: 'ap-lab', type: 'symbol', source: 'aps', layout: { 'text-field': ['get', 't'], 'text-font': font, 'text-size': 11, 'text-anchor': 'left', 'text-offset': [1, 0], 'text-justify': 'left' },
     paint: { 'text-color': ['get', 'col'], 'text-halo-color': '#fff', 'text-halo-width': 1.6 } });
@@ -161,7 +161,7 @@ function updatePlane() {
   const ahead = [pl.x + Math.sin(pl.hdg * D2R) * 4, pl.y - Math.cos(pl.hdg * D2R) * 4], [al, aa] = toLL(...ahead), steps = 12, w = span * .015;
   for (let i = 0; i < steps; i += 2) { const f0 = i / steps, f1 = (i + 1) / steps, la = lon + (al - lon) * f0, lb = lon + (al - lon) * f1, ta = lat + (aa - lat) * f0, tb = lat + (aa - lat) * f1;
     const nx = -Math.cos(pl.hdg * D2R) * w, ny = -Math.sin(pl.hdg * D2R) * w;
-    fx.push({ type: 'Feature', properties: { p: 'hdg', col: '#ffcc33', b: h, h: h + w * 2 }, geometry: { type: 'Polygon', coordinates: [[metersLL(la, ta, nx, ny), metersLL(lb, tb, nx, ny), metersLL(lb, tb, -nx, -ny), metersLL(la, ta, -nx, -ny), metersLL(la, ta, nx, ny)]] } }); }
+    fx.push({ type: 'Feature', properties: { p: 'hdg', col: '#9BF0E1', b: h, h: h + w * 2 }, geometry: { type: 'Polygon', coordinates: [[metersLL(la, ta, nx, ny), metersLL(lb, tb, nx, ny), metersLL(lb, tb, -nx, -ny), metersLL(la, ta, -nx, -ny), metersLL(la, ta, nx, ny)]] } }); }
   map.getSource('planeFx').setData(fc(fx));
 }
 function applyMode() {

@@ -16,6 +16,19 @@ Base map © OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors.
 
 **`fictional.html`: the first prototype**, on an invented chart.
 
+## Look and feel
+
+The game's own interface follows the [Backstage design system](https://backstage.io/) (Spotify, Apache-2.0). Its
+palette, Helvetica type and teal page-header wave come from the `@backstage/theme` package:
+- **Over the map:** the status box, dock, messages and wind widget use the dark navigation surface (`#171717`).
+  Toggles that are on use the teal indicator (`#9BF0E1`).
+- **Pop-ups:** sheets and the title and end screens are light paper cards with the wave header and primary-blue
+  buttons.
+- **Status colours:** green, orange and red come from the Backstage status palette.
+
+Things meant to look like real objects keep their own look: the navigator, the instruments, the windsocks and the
+chart.
+
 ## Navigator panel (src/nav_panel.js)
 
 A generic touchscreen navigator that mounts as a floating, draggable overlay. It's a self-contained class with
@@ -95,8 +108,8 @@ The HDG knob works in both modes.
 `{ nav: true, six: false, info: false, traffic: false }`. Those are the navigator (back on), the six-pack/glass
 instruments, tap-for-info and live traffic. Set one to `true` and rebuild to bring it back.
 
-The **AIR** button (or the A key) shows and hides the airspace drawing. The airspace rules always apply, hidden
-or not.
+The **AIR** button (or the A key) shows and hides the airspace drawing. Airspace starts hidden. The airspace rules
+always apply, hidden or not.
 
 ## Wind
 

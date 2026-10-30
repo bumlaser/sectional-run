@@ -7,66 +7,77 @@
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
-  /* Chart-room arcade: sectional-paper map under a dark cockpit-panel UI. */
+  /* UI chrome follows the Backstage design system (palette, type and page-header wave from @backstage/theme, Apache-2.0):
+     dark navigation surfaces over the map, light paper cards for sheets and overlays. Instruments and the chart keep their own look. */
   :root {
-    --ink:#f3efe2; --panel:rgba(12,17,22,.86); --amber:#ffcc33; --muted:#93a4b3;
-    --good:#8fe07a; --bad:#ff7a6b;
-    --display: Impact, "Arial Black", sans-serif; --body: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; --mono: "Courier New", ui-monospace, monospace;
+    --ink:#ffffff; --panel:rgba(23,23,23,.92); --nav:#171717; --paper2:#424242; --muted:#b5b5b5; --accent:#9BF0E1;
+    --primary:#1F5493; --primaryDk:#9CC9FF; --good:#71CF88; --bad:#F84C55; --warn:#FFB84D;
+    --okL:#1DB954; --errL:#E22134; --border:#E6E6E6; --subtle:#6E6E6E; --infoBg:#ebf5ff; --infoText:#004e8a;
+    --body:"Helvetica Neue", Helvetica, Roboto, Arial, sans-serif; --display:var(--body); --mono:"Helvetica Neue", Helvetica, Roboto, Arial, sans-serif;
+    --wave:url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='1368' height='400' fill='none'%3e%3cmask id='a' width='1368' height='401' x='0' y='0' maskUnits='userSpaceOnUse'%3e%3cpath fill='url(%23paint0_linear)' d='M437 116C223 116 112 0 112 0h1256v400c-82 0-225-21-282-109-112-175-436-175-649-175z'/%3e%3cpath fill='url(%23paint1_linear)' d='M1368 400V282C891-29 788 40 711 161 608 324 121 372 0 361v39h1368z'/%3e%3cpath fill='url(%23paint2_linear)' d='M1368 244v156H0V94c92-24 198-46 375 0l135 41c176 51 195 109 858 109z'/%3e%3cpath fill='url(%23paint3_linear)' d='M1252 400h116c-14-7-35-14-116-16-663-14-837-128-1013-258l-85-61C98 28 46 8 0 0v400h1252z'/%3e%3c/mask%3e%3cg mask='url(%23a)'%3e%3cpath fill='white' d='M-172-98h1671v601H-172z'/%3e%3c/g%3e%3cdefs%3e%3clinearGradient id='paint0_linear' x1='602' x2='1093.5' y1='-960.5' y2='272' gradientUnits='userSpaceOnUse'%3e%3cstop stop-color='white'/%3e%3cstop offset='1' stop-color='white' stop-opacity='0'/%3e%3c/linearGradient%3e%3clinearGradient id='paint1_linear' x1='482' x2='480' y1='1058.5' y2='70.5' gradientUnits='userSpaceOnUse'%3e%3cstop stop-color='white'/%3e%3cstop offset='1' stop-color='white' stop-opacity='0'/%3e%3c/linearGradient%3e%3clinearGradient id='paint2_linear' x1='424' x2='446.1' y1='-587.5' y2='274.6' gradientUnits='userSpaceOnUse'%3e%3cstop stop-color='white'/%3e%3cstop offset='1' stop-color='white' stop-opacity='0'/%3e%3c/linearGradient%3e%3clinearGradient id='paint3_linear' x1='587' x2='349' y1='-1120.5' y2='341' gradientUnits='userSpaceOnUse'%3e%3cstop stop-color='white'/%3e%3cstop offset='1' stop-color='white' stop-opacity='0'/%3e%3c/linearGradient%3e%3c/defs%3e%3c/svg%3e"), linear-gradient(90deg, #005B4B, #005B4B);
+    --shadow:0 2px 4px -1px rgba(0,0,0,.2), 0 4px 5px rgba(0,0,0,.14), 0 1px 10px rgba(0,0,0,.12);
     color-scheme: dark;
   }
-  html, body { height:100%; margin:0; background:#1b2617; color:var(--ink); font-family:var(--body); overflow:hidden; }
+  html, body { height:100%; margin:0; background:#333; color:var(--ink); font-family:var(--body); overflow:hidden; }
   canvas { display:block; touch-action:none; }
   [hidden] { display:none !important; }
-  button { font:bold 13px var(--mono); color:var(--ink); background:#1d252c; border:2px solid #000; box-shadow:2px 2px 0 #000;
+  button { font:500 13px var(--body); letter-spacing:.4px; text-transform:uppercase; color:#fff; background:var(--paper2); border:0; border-radius:4px; box-shadow:var(--shadow);
     padding:8px 4px; cursor:pointer; touch-action:manipulation; user-select:none; -webkit-user-select:none; }
-  button:active, button.on { background:var(--amber); color:#111; }
-  button:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+  button:active { background:#5a5a5a; }
+  button.on { background:var(--accent); color:#171717; }
+  button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   #ctl { position:fixed; left:0; right:0; bottom:0; z-index:3; display:grid; gap:6px;
     padding:8px max(12px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
-    background:linear-gradient(transparent, rgba(8,12,16,.75) 22%); }
+    background:linear-gradient(transparent, rgba(23,23,23,.6) 22%); }
   #ctl .row1 { display:grid; grid-template-columns:1fr 1fr; gap:8px; max-width:660px; width:100%; margin:0 auto; }
-  #ctl .grp { display:grid; grid-template-columns:52px 1fr 52px; gap:4px; background:var(--panel); border:2px solid rgba(255,204,51,.7); padding:4px; }
-  #ctl .grp button { font-size:20px; padding:6px 0; min-height:46px; }
-  .readout { display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.05; font-family:var(--mono); min-width:0; }
-  .readout small { font-size:10px; color:var(--muted); letter-spacing:1px; }
-  .readout b { font-size:19px; font-variant-numeric:tabular-nums; }
-  .readout .tgt { font-size:11px; color:var(--amber); white-space:nowrap; }
+  #ctl .grp { display:grid; grid-template-columns:52px 1fr 52px; gap:4px; background:var(--panel); border-radius:4px; box-shadow:var(--shadow); padding:4px; }
+  #ctl .grp button { font-size:20px; padding:6px 0; min-height:46px; box-shadow:none; }
+  .readout { display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.1; min-width:0; }
+  .readout small { font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+  .readout b { font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .readout .tgt { font-size:11px; color:var(--accent); white-space:nowrap; }
   #ctl .row2 { display:grid; grid-template-columns:repeat(9, minmax(0,1fr)); gap:5px; max-width:660px; width:100%; margin:0 auto; }
   #ctl .row2 button { min-height:40px; font-size:12px; }
-  #landBtn { max-width:660px; width:100%; margin:0 auto; font:900 18px var(--display); letter-spacing:1px; background:var(--good); color:#111; min-height:46px; }
+  #landBtn { max-width:660px; width:100%; margin:0 auto; font:700 16px var(--body); letter-spacing:.5px; background:var(--okL); color:#fff; min-height:46px; }
   .sheet { position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; justify-content:center; padding:0 12px calc(12px + env(safe-area-inset-bottom, 0px)); }
-  .sheet .card { width:100%; max-width:560px; background:#141a1f; border:3px solid var(--amber); box-shadow:0 0 0 4px #000, 0 -10px 40px rgba(0,0,0,.6);
-    padding:16px 18px; box-sizing:border-box; max-height:78vh; overflow:auto; touch-action:pan-y; }
-  .sheet h3 { margin:0 0 4px; font:900 20px var(--display); letter-spacing:1px; color:var(--amber); text-transform:uppercase; text-wrap:balance; }
-  .sheet .kicker { font:bold 11px var(--mono); color:var(--muted); letter-spacing:1px; margin-bottom:8px; }
+  .sheet .card { width:100%; max-width:560px; background:#fff; color:rgba(0,0,0,.87); border-radius:4px; box-shadow:0 -4px 24px rgba(0,0,0,.35), var(--shadow);
+    padding:0 16px 16px; box-sizing:border-box; max-height:78vh; overflow:auto; touch-action:pan-y; color-scheme:light; }
+  .sheet .kicker { margin:0 -16px 12px; padding:12px 16px; background-image:var(--wave); background-size:cover; background-position:center; color:rgba(255,255,255,.85);
+    font:700 11px var(--body); letter-spacing:1px; text-transform:uppercase; }
+  .sheet h3 { margin:0 0 4px; font:700 20px var(--body); color:rgba(0,0,0,.87); text-wrap:balance; }
   .sheet p { margin:8px 0; line-height:1.45; }
   .sheet .opts { display:grid; gap:8px; margin-top:10px; }
-  .sheet .opts button { text-align:left; font:15px var(--body); padding:11px 12px; line-height:1.3; }
-  .sheet .opts button.right { background:#2f6b2a; color:#fff; } .sheet .opts button.wrong { background:#7a2a22; color:#fff; }
-  .sheet .why { border-left:4px solid var(--amber); padding:6px 10px; background:rgba(255,204,51,.08); }
+  .sheet .opts button { text-align:left; font:400 15px var(--body); text-transform:none; letter-spacing:0; padding:11px 12px; line-height:1.3; color:rgba(0,0,0,.87); background:#fff; border:1px solid rgba(0,0,0,.23); box-shadow:none; }
+  .sheet .opts button:active { background:#f2f2f2; }
+  .sheet .opts button.right { background:var(--okL); border-color:var(--okL); color:#fff; } .sheet .opts button.wrong { background:var(--errL); border-color:var(--errL); color:#fff; }
+  .sheet .why { border-left:4px solid #2E77D0; padding:8px 12px; background:var(--infoBg); color:var(--infoText); border-radius:0 4px 4px 0; }
   .sheet .actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
-  .sheet .actions button { font:900 16px var(--display); letter-spacing:1px; background:var(--amber); color:#111; padding:10px 18px; }
-  .fac { display:grid; grid-template-columns:1fr auto; gap:4px 10px; align-items:center; padding:8px 0; border-bottom:1px solid #2a343c; }
-  .fac b { font-size:15px; } .fac small { color:var(--muted); font-family:var(--mono); } .fac button { font-size:12px; padding:8px 10px; }
+  .sheet .actions button { font:500 14px var(--body); background:var(--primary); color:#fff; padding:10px 18px; }
+  .fac { display:grid; grid-template-columns:1fr auto; gap:4px 10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); }
+  .fac b { font-size:15px; } .fac small { color:var(--subtle); } .fac button { font-size:12px; padding:8px 12px; background:var(--primary); color:#fff; }
+  .sheet .pos { color:#13803d; }
   #toast { position:fixed; left:50%; transform:translateX(-50%); top:calc(98px + env(safe-area-inset-top, 0px)); z-index:4; width:min(460px, calc(100% - 32px));
-    background:rgba(250,248,240,.97); color:#18222b; border:2px solid #000; box-shadow:3px 3px 0 #000; padding:10px 12px; box-sizing:border-box; font-size:13px; line-height:1.4; max-height:45vh; overflow:auto; }
-  #toast b { color:#0d3f7a; } #toast .x { float:right; font-weight:bold; cursor:pointer; padding-left:8px; }
-  #toast div + div { margin-top:4px; padding-top:4px; border-top:1px solid #d9d3c3; }
+    background:#fff; color:rgba(0,0,0,.87); border-radius:4px; box-shadow:var(--shadow); padding:10px 12px; box-sizing:border-box; font-size:13px; line-height:1.4; max-height:45vh; overflow:auto; }
+  #toast b { color:var(--primary); } #toast .x { float:right; font-weight:bold; cursor:pointer; padding-left:8px; }
+  #toast div + div { margin-top:4px; padding-top:4px; border-top:1px solid var(--border); }
   .overlay { position:fixed; inset:0; z-index:8; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;
-    background:radial-gradient(ellipse at center, rgba(0,0,0,.5), rgba(0,0,0,.88)); touch-action:pan-y; }
-  .overlay .card { width:100%; max-width:720px; max-height:100%; overflow:auto; background:#141a1f; border:3px solid var(--amber); box-shadow:0 0 0 6px #000; padding:22px 24px; box-sizing:border-box; }
-  .overlay h1 { margin:0 0 4px; font:900 42px/1 var(--display); letter-spacing:2px; color:var(--amber); text-shadow:3px 3px 0 #000; text-transform:uppercase; text-wrap:balance; }
-  .overlay h2 { margin:0 0 14px; font:bold 13px var(--mono); letter-spacing:2px; color:#9fb3c3; text-transform:uppercase; }
+    background:rgba(0,0,0,.6); touch-action:pan-y; }
+  .overlay .card { width:100%; max-width:720px; max-height:100%; overflow:auto; background:#fff; color:rgba(0,0,0,.87); border-radius:4px; box-shadow:var(--shadow); padding:0 0 20px; box-sizing:border-box; color-scheme:light; }
+  .overlay .card > :not(.bs-head) { margin-left:24px; margin-right:24px; }
+  .bs-head { padding:24px 24px 18px; margin-bottom:12px; background-image:var(--wave); background-size:cover; background-position:center; color:#fff; overflow:hidden; }
+  .overlay h1 { margin:0 0 6px; font:700 34px/1.1 var(--body); color:#fff; text-wrap:balance; }
+  .overlay h2 { margin:0; font:400 14px var(--body); color:rgba(255,255,255,.85); }
   .overlay p { line-height:1.5; margin:8px 0; } .overlay ul { margin:8px 0; padding-left:20px; line-height:1.5; }
-  .overlay .go { font:900 22px var(--display); letter-spacing:2px; background:var(--amber); color:#111; padding:10px 26px; margin-top:12px; box-shadow:4px 4px 0 #000; }
+  .overlay .go { font:500 16px var(--body); letter-spacing:.5px; background:var(--primary); color:#fff; padding:12px 28px; margin-top:12px; }
+  .overlay .go:disabled { background:#bdbdbd; }
   .opt { display:flex; gap:10px; align-items:center; margin:12px 0 4px; font-size:15px; cursor:pointer; }
-  .opt input { width:20px; height:20px; accent-color:var(--amber); }
-  .notam { font-family:var(--mono); font-size:13px; background:#0b0f13; border:1px dashed #50606d; padding:8px 10px; margin:10px 0; line-height:1.5; }
-  .fine { font-size:12px; color:#8c9aa6; }
-  table { border-collapse:collapse; width:100%; font-size:14px; margin:10px 0; }
-  td { padding:4px 6px; border-bottom:1px solid #2a343c; } td.pts { text-align:right; font-family:var(--mono); font-weight:bold; font-variant-numeric:tabular-nums; }
-  .pos { color:var(--good); } .neg { color:var(--bad); }
-  .grade { float:right; font:900 68px var(--display); color:var(--amber); text-shadow:4px 4px 0 #000; margin-left:12px; }
+  .opt input { width:20px; height:20px; accent-color:var(--primary); }
+  .notam { font-family:"Courier New", ui-monospace, monospace; font-size:13px; background:#F8F8F8; color:rgba(0,0,0,.87); border:1px solid var(--border); border-radius:4px; padding:8px 10px; margin:10px 0; line-height:1.5; }
+  .fine { font-size:12px; color:var(--subtle); }
+  table { border-collapse:collapse; width:calc(100% - 48px); font-size:14px; margin:10px 0; }
+  td { padding:6px; border-bottom:1px solid var(--border); } td.pts { text-align:right; font-weight:bold; font-variant-numeric:tabular-nums; }
+  .pos { color:#13803d; } .neg { color:#CA001B; }
+  .grade { float:right; margin-left:12px; width:64px; height:64px; border-radius:50%; background:#fff; color:#005B4B; font:700 38px/64px var(--body); text-align:center; box-shadow:var(--shadow); }
   #map { position:fixed; inset:0; background:#dde8c6; }
   canvas#c { position:fixed; inset:0; pointer-events:none; z-index:1; }
   .maplibregl-ctrl-bottom-right { bottom:calc(118px + env(safe-area-inset-bottom, 0px)); }
@@ -107,14 +118,13 @@
 
 <div id="title" class="overlay">
   <div class="card">
-    <h1>Sectional Run</h1>
-    <h2>Frederick (FDK) → Bay Bridge (W29) · real airspace</h2>
+    <header class="bs-head"><h1>Sectional Run</h1>
+    <h2>Frederick (FDK) → Bay Bridge (W29) · real airspace</h2></header>
     <p>You've just departed <b>Frederick Muni</b> in <b>N421AP</b>, headed for <b>Bay Bridge</b> on Kent Island. The plane holds 110 knots on its own, so you only steer and pick altitudes. Nothing stalls and nothing crashes. The challenge is reading the chart. The direct line runs straight through the Washington DC SFRA, so you'll need to plan around it, slip under the Baltimore Bravo shelves, and answer checkride questions along the way.</p>
     <div class="notam" id="briefNotam"></div>
     <ul>
       <li><b>◀ ▶</b> (hold) set the heading bug, and the plane turns to it at standard rate · <b>▲ ▼</b> change target altitude by 500 ft</li>
-      <li><b>INST</b> shows draggable flight instruments, as a six-pack or a <b>GLASS</b> EADI and EHSI (switch in the panel's top bar). Turn its <b>HDG knob</b> to set the bug, or tap the knob to sync it to your heading</li>
-      <li><b>RADIO</b> call Potomac Approach, a tower, or self-announce on the CTAF</li>
+      <li><b>RADIO</b> call Potomac Approach, a tower, or self-announce on the CTAF · <b>AIR</b> shows or hides the airspace (hidden to start; the rules always apply)</li>
       <li><b>CHASE / ORBIT / 2D</b> cycles the camera: track-up behind the plane, free orbit (drag or two-finger twist and tilt), or flat north-up · <b>TAC</b> overlays the real FAA chart</li>
       <li>Tap anything on the map to find out what it is · pinch or <b>− +</b> to zoom · drag to look around</li>
       <li><b>NAV</b> opens the touchscreen navigator: GS, TRK, DIS and DTK, a moving map, the flight plan, nearest airports and Direct-To</li>
@@ -793,8 +803,8 @@ function briefing() {
   return `ROUTE FDK → W29 · DIRECT ${crs}° MAG · ${dist} NM · VAR ${VAR}°W<br>WX: VFR, CLEAR, VIS 10SM, WIND CALM<br>SUA TODAY: ${rStatusLine()}<br>NO SFRA FLIGHT PLAN FILED · STAY OUT OF THE DC SFRA`;
 }
 const flashes = [];
-function flash(text, color = '#ffcc33', life = 2.8) { flashes.push({ text, color, life, max: life }); if (flashes.length > 4) flashes.shift(); }
-function addScore(pts, label) { game.score += pts; game.log.push({ label, pts }); flash((pts > 0 ? '+' : '') + pts + '  ' + label, pts >= 0 ? '#9df27f' : '#ff7a6b'); }
+function flash(text, color = '#9CC9FF', life = 2.8) { flashes.push({ text, color, life, max: life }); if (flashes.length > 4) flashes.shift(); }
+function addScore(pts, label) { game.score += pts; game.log.push({ label, pts }); flash((pts > 0 ? '+' : '') + pts + '  ' + label, pts >= 0 ? '#71CF88' : '#F84C55'); }
 function radioMsg(who, text) { game.radioLog.push({ who, text, t: game.t }); if (game.radioLog.length > 14) game.radioLog.shift(); }
 const d2 = a => Math.hypot(pl.x - a.x, pl.y - a.y);
 const grpVols = g => VOL.filter(v => v.grp === g);
@@ -892,12 +902,12 @@ function openRadio() {
     return `<div class="fac"><div><b>${f.name}</b> ${st}<br><small>${FREQ[f.name] ? FREQ[f.name] + ' · ' : ''}${f.note} · ${Math.hypot(pl.x - f.x, pl.y - f.y).toFixed(0)} NM</small></div><button type="button" data-call="${f.g}">${f.act}</button></div>`; }).join('');
   const qrow = `<div class="fac"><div><b>Checkride questions</b><br><small>${quizOn ? 'on: questions pop up at chart features' : 'off: free flight, no questions'}</small></div><button type="button" data-call="QUIZ">${quizOn ? 'Turn off' : 'Turn on'}</button></div>`;
   const fss = `<div class="fac"><div><b>Leesburg Radio (Flight Service)</b><br><small>122.200 · special use airspace status</small></div><button type="button" data-call="FSS">SUA status?</button></div>`;
-  const log = game.radioLog.slice(-4).map(m => `<p style="margin:4px 0;font-family:var(--mono);font-size:12px;color:${m.who === 'YOU' ? '#9fd3ff' : '#9df27f'}">${m.who}: ${m.text}</p>`).join('');
+  const log = game.radioLog.slice(-4).map(m => `<p style="margin:4px 0;font-size:12px;color:${m.who === 'YOU' ? '#1F5493' : '#13803d'}">${m.who}: ${m.text}</p>`).join('');
   document.getElementById('sheetCard').innerHTML = `<div class="kicker">RADIO · N421AP</div><h3>Who do you want to call?</h3>${rows || '<p>No approach, tower or CTAF in range.</p>'}${fss}${qrow}${log ? '<div style="margin-top:10px">' + log + '</div>' : ''}<div class="actions"><button type="button" data-close>Close</button></div>`;
   showSheet(true);
 }
 function call(g) {
-  if (g === 'QUIZ') { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); return openRadio(); }
+  if (g === 'QUIZ') { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#9CC9FF', 1.8); return openRadio(); }
   if (g === 'FSS') { game.lastFac = 'Leesburg Radio'; radioMsg('YOU', 'Leesburg Radio, N421AP, request status of the restricted areas along the bay.'); radioMsg('FSS', `N421AP, ${rStatusLine().replace(/<\/?b>/g, '')}. And remember, no SFRA flight plan on file for you.`); return openRadio(); }
   const f = facilities().find(f => f.g === g); if (!f) return; game.lastFac = f.name;
   if (g === 'B') {
@@ -907,7 +917,7 @@ function call(g) {
   } else if (g.startsWith('D:')) {
     radioMsg('YOU', `${f.name}, N421AP, ${posn(f.x, f.y)}, transitioning your Delta eastbound.`);
     if (Math.random() < .85) { game.contact[g] = true; radioMsg('TWR', `N421AP, ${f.name}, transition approved, report clear of the Delta.`); }
-    else radioMsg('TWR', `Aircraft calling ${f.name}, standby.`), flash('No callsign in that reply. Two-way comms are NOT established yet.', '#ffb347', 3.6);
+    else radioMsg('TWR', `Aircraft calling ${f.name}, standby.`), flash('No callsign in that reply. Two-way comms are NOT established yet.', '#FFB84D', 3.6);
   } else if (g === 'CTAF') { game.ctaf = true; radioMsg('YOU', `Bay Bridge traffic, Skyhawk N421AP, ${posn(DEST.x, DEST.y)}, inbound for landing, Bay Bridge.`); }
   openRadio();
 }
@@ -944,13 +954,13 @@ function rules() {
   updateLand(); checkQuizzes();
 }
 function enter(g, v) {
-  if (v.k === 'B') { if (!game.clrB) { game.viol++; addScore(-300, 'Class B bust: no clearance'); radioMsg('ATC', 'N421AP, Potomac Approach, possible pilot deviation. Advise you call this number…'); } else flash('Inside Class B under your clearance', '#9df27f'); }
-  else if (v.k === 'D') { if (!game.contact[g]) { game.viol++; addScore(-150, `Entered ${v.n.replace(' CLASS D', '')} Class D without two-way comms`); } else flash(`In the ${v.n.replace(' CLASS D', '')} Class D, in contact`, '#9df27f'); }
+  if (v.k === 'B') { if (!game.clrB) { game.viol++; addScore(-300, 'Class B bust: no clearance'); radioMsg('ATC', 'N421AP, Potomac Approach, possible pilot deviation. Advise you call this number…'); } else flash('Inside Class B under your clearance', '#71CF88'); }
+  else if (v.k === 'D') { if (!game.contact[g]) { game.viol++; addScore(-150, `Entered ${v.n.replace(' CLASS D', '')} Class D without two-way comms`); } else flash(`In the ${v.n.replace(' CLASS D', '')} Class D, in contact`, '#71CF88'); }
   else if (v.k === 'SFRA') { game.viol++; addScore(-400, 'Entered the DC SFRA without a flight plan!'); radioMsg('ATC', 'N421AP, Potomac Approach, you are inside the SFRA without authorization. Turn immediately to exit, and expect a phone number.'); }
   else if (v.k === 'FRZ') { game.viol++; addScore(-800, 'Penetrated the DC Flight Restricted Zone!'); }
   else if (v.k === 'P') { game.viol++; addScore(-500, `Flew into prohibited area ${v.n}!`); }
-  else if (v.k === 'R') { if (SUA_STATUS[g]) { game.viol++; addScore(-300, `Entered ${v.n} while it was active`); } else flash(`In ${v.n}. It's cold today, so that's legal`, '#9df27f'); }
-  else if (v.k === 'MOA') flash(`Entering ${v.n}. Watch for military traffic`, '#ffcc33');
+  else if (v.k === 'R') { if (SUA_STATUS[g]) { game.viol++; addScore(-300, `Entered ${v.n} while it was active`); } else flash(`In ${v.n}. It's cold today, so that's legal`, '#71CF88'); }
+  else if (v.k === 'MOA') flash(`Entering ${v.n}. Watch for military traffic`, '#FFB84D');
 }
 let landShown = null;
 function updateLand(force) { const ok = running && !game.over && d2(DEST) < 3 && pl.alt < 2100 && game.ctaf; if (ok !== landShown || force) { landShown = ok; document.getElementById('landBtn').hidden = !ok; } }
@@ -969,8 +979,8 @@ function label(text, x, y, color, size = 11, weight = 'bold', align = 'center') 
 function frac(top, bot, x, y, color) { label(top, x, y - 7, color, 12, '900'); ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 11, y); ctx.lineTo(x + 11, y); ctx.stroke(); label(bot, x, y + 8, color, 12, '900'); }
 function ringsPath(rings, z = 0) { ctx.beginPath(); for (const r of rings) { r.forEach(([x, y], i) => { const [a, b] = P(x, y, z); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); }); ctx.closePath(); } }
 // Airspace drawing can be hidden; the rules (insideVol checks) always apply.
-let airOn = true; try { airOn = localStorage.getItem('sr.air') !== '0'; } catch (_) {}
-function setAir(on) { airOn = on; try { localStorage.setItem('sr.air', on ? '1' : '0'); } catch (_) {} document.getElementById('bAir').classList.toggle('on', on); }
+let airOn = false; try { airOn = localStorage.getItem('sr.air2') === '1'; } catch (_) {}   // hidden unless you turn it on
+function setAir(on) { airOn = on; try { localStorage.setItem('sr.air2', on ? '1' : '0'); } catch (_) {} document.getElementById('bAir').classList.toggle('on', on); }
 function visibleVol(v) { if (!airOn) return false; const [a, b] = P(v.bb[0], v.bb[1]), [c, d] = P(v.bb[2], v.bb[3]); return c > -50 && a < W + 50 && d > -50 && b < H + 50; }
 
 function drawBase() {
@@ -1051,7 +1061,7 @@ function drawAirports() {
     if (cam.s > 70) for (const r of rws) { const [p0, p1] = [P(r[0], r[1]), P(r[2], r[3])]; ctx.strokeStyle = 'rgba(60,62,66,.9)'; ctx.lineWidth = Math.max(2.5, r[5] / 6076 * cam.s); ctx.beginPath(); ctx.moveTo(...p0); ctx.lineTo(...p1); ctx.stroke(); }
     if ((cam.s > 10 || big || a === DEST || a === START) && (cam.hz < .001 || d2(a) < 12 || a === DEST)) { const nm = a.n.toUpperCase().replace(/\/.*$/, '');
       label(`${nm} (${a.id})`, x + rr + 6, y - 6, col, 11, '900', 'left'); label(`${AP_FREQ[a.id] ? AP_FREQ[a.id] + (a.tw ? ' ★' : '') + ' · ' : a.tw ? 'CT ★ · ' : ''}${a.e} ft`, x + rr + 6, y + 7, col, 10, 'bold', 'left'); }
-    if (a === DEST) { ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.ellipse(x, y, 24, 24 * cam.T, 0, 0, 6.283); ctx.stroke(); ctx.setLineDash([]); } }
+    if (a === DEST) { ctx.strokeStyle = '#FFD600'; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.ellipse(x, y, 24, 24 * cam.T, 0, 0, 6.283); ctx.stroke(); ctx.setLineDash([]); } }
 }
 function drawVolumes3D() {
   const cap = z => Math.min(z, 12500), order = VOL.filter(v => RULED.includes(v.k) && visibleVol(v)).sort((a, b) => (b.bb[2] - b.bb[0]) * (b.bb[3] - b.bb[1]) - (a.bb[2] - a.bb[0]) * (a.bb[3] - a.bb[1]));
@@ -1075,9 +1085,9 @@ function drawPlane() {
   if (cam.hz > .001) { ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(gx, gy, 10, 10 * cam.T, 0, 0, 6.283); ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(ax, ay); ctx.stroke(); ctx.setLineDash([]); }
   else { ctx.save(); ctx.translate(gx + 6, gy + 8); ctx.rotate(pl.hdg * D2R); ctx.globalAlpha = .3; planeSprite('#000', '#000'); ctx.restore(); }
   ctx.save(); ctx.translate(ax, ay); ctx.rotate(pl.hdg * D2R); planeSprite('#fbfbf6', '#1d3f7a'); ctx.restore();
-  ctx.strokeStyle = 'rgba(255,204,51,.85)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(...P(pl.x + Math.sin(pl.hdg * D2R) * 4, pl.y - Math.cos(pl.hdg * D2R) * 4, pl.alt)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(155,240,225,.9)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(...P(pl.x + Math.sin(pl.hdg * D2R) * 4, pl.y - Math.cos(pl.hdg * D2R) * 4, pl.alt)); ctx.stroke(); ctx.setLineDash([]);
   const tag = `${fmt(pl.alt)}${pl.tgt !== Math.round(pl.alt) ? (pl.tgt > pl.alt ? ' ↗ ' : ' ↘ ') + fmt(pl.tgt) : ''}`;
-  ctx.font = 'bold 12px "Courier New", monospace'; const tw = ctx.measureText(tag).width + 10; ctx.fillStyle = 'rgba(12,17,22,.85)'; ctx.fillRect(ax + 18, ay - 9, tw, 18); ctx.fillStyle = '#ffcc33'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(tag, ax + 23, ay + 1);
+  ctx.font = `bold 12px ${UIF}`; const tw = ctx.measureText(tag).width + 12; panel(ax + 18, ay - 10, tw, 20); ctx.font = `bold 12px ${UIF}`; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(tag, ax + 23, ay + 1);
 }
 function planeSprite(c, st) {
   ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(0, -14); ctx.quadraticCurveTo(3, -12, 2.8, -5); ctx.lineTo(1.2, 12); ctx.lineTo(-1.2, 12); ctx.lineTo(-2.8, -5); ctx.quadraticCurveTo(-3, -12, 0, -14); ctx.fill();
@@ -1085,7 +1095,9 @@ function planeSprite(c, st) {
   ctx.fillStyle = st; ctx.fillRect(-19, -4.5, 3.2, 2.5); ctx.fillRect(15.8, -4.5, 3.2, 2.5); ctx.fillRect(-.7, 1, 1.4, 9); ctx.fillStyle = '#25384c'; ctx.fillRect(-2.3, -8, 4.6, 1.8);
 }
 // ---------------- HUD ----------------
-function panel(x, y, w, h) { ctx.fillStyle = 'rgba(12,17,22,.86)'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = 'rgba(255,204,51,.7)'; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2); }
+const UIF = '"Helvetica Neue", Helvetica, Roboto, Arial, sans-serif';
+function rrect(x, y, w, h, r = 4) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function panel(x, y, w, h) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 2; ctx.fillStyle = 'rgba(23,23,23,.92)'; rrect(x, y, w, h); ctx.fill(); ctx.restore(); }
 function txt(s, x, y, font, color, align = 'left') { ctx.font = font; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = color; ctx.fillText(s, x, y); }
 function wrapT(s, maxW) { const words = s.split(' '), out = []; let cur = ''; for (const w of words) { const t = cur ? cur + ' ' + w : w; if (ctx.measureText(t).width > maxW && cur) { out.push(cur); cur = w; } else cur = t; } if (cur) out.push(cur); return out; }
 function airspaceNow() {
@@ -1123,38 +1135,42 @@ function drawWindsocks() {
 // Corner wind widget: an arrow showing which way the wind blows across the screen, plus the magnetic wind.
 function drawWindWidget(cx, cy) {
   const r = 30, w = windAt(pl.x, pl.y), calm = w.spd < 3;
-  ctx.fillStyle = 'rgba(12,17,22,.82)'; ctx.beginPath(); ctx.arc(cx, cy, r + 6, 0, 6.283); ctx.fill();
+  ctx.fillStyle = 'rgba(23,23,23,.92)'; ctx.beginPath(); ctx.arc(cx, cy, r + 6, 0, 6.283); ctx.fill();
   ctx.strokeStyle = '#3a4650'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.stroke();
   const [px, py] = P(pl.x, pl.y), [nx, ny] = P(pl.x, pl.y - 1), na = Math.atan2(nx - px, -(ny - py));   // screen angle of north
-  ctx.save(); ctx.translate(cx, cy); ctx.rotate(na); txt('N', 0, -r + 9, 'bold 9px "Courier New", monospace', '#7d8b96', 'center'); ctx.restore();
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(na); txt('N', 0, -r + 9, `bold 9px ${UIF}`, '#b5b5b5', 'center'); ctx.restore();
   if (!calm) {
     const to = (w.dir + 180) * D2R, [tx, ty] = P(pl.x + Math.sin(to), pl.y - Math.cos(to)), a = Math.atan2(ty - py, tx - px);
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(a); ctx.strokeStyle = '#9fe0ff'; ctx.fillStyle = '#9fe0ff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(-r + 8, 0); ctx.lineTo(r - 12, 0); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(r - 6, 0); ctx.lineTo(r - 15, -6); ctx.lineTo(r - 15, 6); ctx.closePath(); ctx.fill(); ctx.restore();
-  } else txt('CALM', cx, cy + 4, 'bold 10px "Courier New", monospace', '#9fe0ff', 'center');
-  ctx.fillStyle = 'rgba(12,17,22,.82)'; const label = calm ? 'WIND CALM' : windMag(w); ctx.font = 'bold 11px "Courier New", monospace'; const lw = ctx.measureText(label).width + 12;
-  ctx.fillRect(cx - r - 8 - lw, cy - 9, lw, 18); txt(label, cx - r - 14, cy + 4, 'bold 11px "Courier New", monospace', '#9fe0ff', 'right');   // to the left, clear of the flash messages
+  } else txt('CALM', cx, cy + 4, `bold 10px ${UIF}`, '#9CC9FF', 'center');
+  const label = calm ? 'Wind calm' : windMag(w); ctx.font = `bold 12px ${UIF}`; const lw = ctx.measureText(label).width + 14;
+  panel(cx - r - 8 - lw, cy - 10, lw, 20); txt(label, cx - r - 15, cy + 4, `bold 12px ${UIF}`, '#ffffff', 'right');   // to the left, clear of the flash messages
 }
 function drawHUD() {
   drawWindsocks();
   const narrow = W < 640, w = narrow ? W - 24 : 440, x = 12, y = 12, as = airspaceNow();
   panel(x, y, w, 76);
-  txt('SECTIONAL RUN', x + 12, y + 21, '900 14px Impact, "Arial Black", sans-serif', '#ffcc33');
-  txt(`${Math.round(game.score)} PTS · ${Math.floor(game.t / 60)}:${String(Math.floor(game.t % 60)).padStart(2, '0')}${paused ? ' · PAUSED' : ''}`, x + w - 12, y + 21, 'bold 12px "Courier New", monospace', '#ffcc33', 'right');
-  txt(`AIRSPACE: ${as.main}`, x + 12, y + 43, `bold ${narrow ? 13 : 14}px "Trebuchet MS", sans-serif`, as.bad ? '#ff7a6b' : '#f3efe2');
-  txt(as.note, x + 12, y + 62, '12px "Trebuchet MS", sans-serif', '#9fb3c3');
-  txt(`W29 ${d2(DEST).toFixed(0)} NM · ${hdg3(brg(pl.x, pl.y, DEST.x, DEST.y) + VAR)}°`, x + w - 12, y + 62, 'bold 12px "Courier New", monospace', '#9fd3ff', 'right');
+  ctx.fillStyle = '#9BF0E1'; ctx.fillRect(x, y + 8, 3, 60);   // Backstage's teal indicator
+  txt('SECTIONAL RUN', x + 14, y + 21, `bold 12px ${UIF}`, '#9BF0E1');
+  txt(`${Math.round(game.score)} pts · ${Math.floor(game.t / 60)}:${String(Math.floor(game.t % 60)).padStart(2, '0')}${paused ? ' · paused' : ''}`, x + w - 12, y + 21, `bold 12px ${UIF}`, '#ffffff', 'right');
+  txt(`Airspace: ${as.main}`, x + 14, y + 43, `bold ${narrow ? 14 : 15}px ${UIF}`, as.bad ? '#F84C55' : '#ffffff');
+  txt(as.note, x + 14, y + 62, `12px ${UIF}`, '#b5b5b5');
+  txt(`W29 ${d2(DEST).toFixed(0)} NM · ${hdg3(brg(pl.x, pl.y, DEST.x, DEST.y) + VAR)}°`, x + w - 12, y + 62, `bold 12px ${UIF}`, '#9CC9FF', 'right');
   const m = game.radioLog[game.radioLog.length - 1];
-  if (m && game.t - m.t < 25) { ctx.font = '12px "Courier New", monospace'; const L = wrapT(`${m.who}: ${m.text}`, w - 20); panel(x, y + 82, w, 12 + L.length * 15); L.forEach((l, i) => txt(l, x + 10, y + 99 + i * 15, '12px "Courier New", monospace', m.who === 'YOU' ? '#9fd3ff' : '#9df27f')); }
+  if (m && game.t - m.t < 25) { ctx.font = `13px ${UIF}`; const L = wrapT(`${m.who}: ${m.text}`, w - 24); panel(x, y + 82, w, 12 + L.length * 15); L.forEach((l, i) => txt(l, x + 12, y + 99 + i * 15, `13px ${UIF}`, m.who === 'YOU' ? '#9CC9FF' : '#71CF88')); }
   { const rp = m && game.t - m.t < 25, my = narrow ? y + 76 + (rp ? 12 + wrapT(`${m.who}: ${m.text}`, w - 20).length * 15 + 6 : 0) + 44 : (cam.chart ? 40 : 12) + 36;
     drawWindWidget(W - 12 - 36, my); }
   let fy = Math.max(H * .3, 200);
-  for (const f of flashes) { ctx.globalAlpha = clamp(Math.min(f.life / .5, (f.max - f.life + .2) / .2), 0, 1); ctx.font = `900 ${narrow ? 18 : 22}px Impact, "Arial Black", sans-serif`; ctx.textAlign = 'center'; ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
-    for (const l of wrapT(f.text, W - 40)) { ctx.strokeText(l, W / 2, fy); ctx.fillStyle = f.color; ctx.fillText(l, W / 2, fy); fy += narrow ? 24 : 28; } ctx.globalAlpha = 1; }
+  for (const f of flashes) {   // snackbar-style chips with a status-coloured edge
+    ctx.globalAlpha = clamp(Math.min(f.life / .5, (f.max - f.life + .2) / .2), 0, 1); ctx.font = `bold ${narrow ? 14 : 15}px ${UIF}`;
+    const L = wrapT(f.text, Math.min(W - 64, 460)), cw = Math.max(...L.map(l => ctx.measureText(l).width)) + 30, ch = L.length * 19 + 14, cx0 = (W - cw) / 2;
+    panel(cx0, fy, cw, ch); ctx.fillStyle = f.color; rrect(cx0, fy, 4, ch, [4, 0, 0, 4]); ctx.fill();
+    L.forEach((l, i) => txt(l, W / 2 + 2, fy + 21 + i * 19, ctx.font, '#ffffff', 'center')); fy += ch + 6; ctx.globalAlpha = 1; }
   const [dx, dy] = P(DEST.x, DEST.y);
   if (dx < 0 || dx > W || dy < 0 || dy > H) { const [ax, ay] = P(pl.x, pl.y, pl.alt), a = Math.atan2(dy - ay, dx - ax); ctx.save(); ctx.translate(ax + Math.cos(a) * 46, ay + Math.sin(a) * 46); ctx.rotate(a); ctx.fillStyle = '#ffd21f'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-6, -10); ctx.lineTo(-2, 0); ctx.lineTo(-6, 10); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore(); }
-  if (cam.chart) { ctx.font = 'bold 11px "Courier New", monospace'; const s = 'FAA BALTIMORE–WASHINGTON TAC'; const tw = ctx.measureText(s).width + 12; ctx.fillStyle = 'rgba(12,17,22,.8)'; ctx.fillRect(W - tw - 12, 12, tw, 20); txt(s, W - 18, 26, 'bold 11px "Courier New", monospace', '#ffcc33', 'right'); }
+  if (cam.chart) { ctx.font = 'bold 11px "Courier New", monospace'; const s = 'FAA BALTIMORE–WASHINGTON TAC'; ctx.font = `bold 11px ${UIF}`; const tw = ctx.measureText(s).width + 16; panel(W - tw - 12, 12, tw, 22); txt(s, W - 20, 27, `bold 11px ${UIF}`, '#9BF0E1', 'right'); }
 }
 function render() {
   drawBase();
@@ -1176,7 +1192,7 @@ addEventListener('keydown', e => {
   if (keys[e.code]) return; keys[e.code] = true; if (!running || game.over) return;
   if (game.quiz && !game.quiz.done) { const n = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code]; if (n !== undefined) answerQuiz(n); return; }
   if (!document.getElementById('sheet').hidden) { if (e.code === 'Escape' || e.code === 'Enter') closeSheet(); return; }
-  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyN: () => nav && nav.toggle(), KeyG: () => six && document.getElementById('bInst').classList.toggle('on', six.toggle()), KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); }, KeyL: land, KeyA: () => setAir(!airOn), Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
+  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyN: () => nav && nav.toggle(), KeyG: () => six && document.getElementById('bInst').classList.toggle('on', six.toggle()), KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#9CC9FF', 1.8); }, KeyL: land, KeyA: () => setAir(!airOn), Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; hold.left = hold.right = false; });
@@ -1191,7 +1207,7 @@ holdBtn('bLeft', 'left'); holdBtn('bRight', 'right');
 const tap = (id, f) => document.getElementById(id).addEventListener('click', f);
 tap('bUp', () => setTgt(500)); tap('bDown', () => setTgt(-500)); tap('bRadio', () => running && !game.over && openRadio()); tap('bView', () => toggleView()); tap('bChart', () => toggleChart());
 tap('bSpeed', cycleSpeed); tap('bZin', () => zoom(1.4)); tap('bZout', () => zoom(1 / 1.4)); tap('bPause', togglePause); tap('bNav', () => { if (nav) document.getElementById('bNav').classList.toggle('on', nav.toggle()); });
-tap('bAir', () => { setAir(!airOn); flash(airOn ? 'Airspace shown' : 'Airspace hidden. The rules still apply!', '#cfe8ff', 1.8); });
+tap('bAir', () => setAir(!airOn));
 tap('bInst', () => { if (six) document.getElementById('bInst').classList.toggle('on', six.toggle()); }); tap('landBtn', land);
 document.getElementById('sheetCard').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.opt !== undefined) answerQuiz(+t.dataset.opt); else if (t.dataset.call) call(t.dataset.call); else if (t.hasAttribute('data-close')) closeSheet(); });
 function showSheet(on) { document.getElementById('sheet').hidden = !on; }
@@ -1302,8 +1318,8 @@ function frame(now) {
 function showEnd() {
   const sc = Math.round(game.score), grade = sc >= 1400 ? 'A' : sc >= 1000 ? 'B' : sc >= 650 ? 'C' : sc >= 300 ? 'D' : 'F';
   const rows = game.log.map(l => `<tr><td>${l.label}</td><td class="pts ${l.pts >= 0 ? 'pos' : 'neg'}">${l.pts > 0 ? '+' : ''}${l.pts}</td></tr>`).join('');
-  document.getElementById('endCard').innerHTML = `<div class="grade">${grade}</div><h1>Arrived at Bay Bridge</h1>
-    <h2>${game.correct} of ${game.quizzes} checkride questions · ${game.viol} airspace violation${game.viol === 1 ? '' : 's'} · ${Math.floor(game.t / 60)} min flight</h2>
+  document.getElementById('endCard').innerHTML = `<header class="bs-head"><div class="grade">${grade}</div><h1>Arrived at Bay Bridge</h1>
+    <h2>${game.correct} of ${game.quizzes} checkride questions · ${game.viol} airspace violation${game.viol === 1 ? '' : 's'} · ${Math.floor(game.t / 60)} min flight</h2></header>
     <table>${rows}<tr><td><b>Total</b></td><td class="pts"><b>${sc}</b></td></tr></table>
     <p class="fine">Each flight rolls new conditions. Restricted areas scheduled "by NOTAM" may be hot or cold, and Potomac Approach won't always clear you into the Bravo.</p>
     <button class="go" type="button" id="againBtn">Fly it again</button>`;
@@ -1463,7 +1479,7 @@ function addLayers() {
     paint: { 'text-color': '#1b2c4a', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
   map.addLayer({ id: 'rwy', type: 'fill', source: 'rwy', minzoom: 11, paint: { 'fill-color': '#4b4c50', 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 11.6, 1] } });
   const apR = ['interpolate', ['exponential', 2], ['zoom'], 7, 1.8, 10, 10, 12, 40];   // matches a 0.6 nm ground radius
-  map.addLayer({ id: 'ap-pt', type: 'circle', source: 'aps', maxzoom: 11.6, paint: { 'circle-radius': apR, 'circle-color': 'rgba(255,255,255,.85)', 'circle-stroke-color': ['case', ['==', ['get', 'dest'], 1], '#ffcc33', ['get', 'col']], 'circle-stroke-width': ['case', ['==', ['get', 'dest'], 1], 4, 2.5], 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map' } });
+  map.addLayer({ id: 'ap-pt', type: 'circle', source: 'aps', maxzoom: 11.6, paint: { 'circle-radius': apR, 'circle-color': 'rgba(255,255,255,.85)', 'circle-stroke-color': ['case', ['==', ['get', 'dest'], 1], '#FFD600', ['get', 'col']], 'circle-stroke-width': ['case', ['==', ['get', 'dest'], 1], 4, 2.5], 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map' } });
   map.addLayer({ id: 'rwysym', type: 'line', source: 'rwysym', maxzoom: 11.6, paint: { 'line-color': ['get', 'col'], 'line-width': ['interpolate', ['exponential', 2], ['zoom'], 7, 1, 10, 3, 11.6, 5] } });
   map.addLayer({ id: 'ap-lab', type: 'symbol', source: 'aps', layout: { 'text-field': ['get', 't'], 'text-font': font, 'text-size': 11, 'text-anchor': 'left', 'text-offset': [1, 0], 'text-justify': 'left' },
     paint: { 'text-color': ['get', 'col'], 'text-halo-color': '#fff', 'text-halo-width': 1.6 } });
@@ -1490,7 +1506,7 @@ function updatePlane() {
   const ahead = [pl.x + Math.sin(pl.hdg * D2R) * 4, pl.y - Math.cos(pl.hdg * D2R) * 4], [al, aa] = toLL(...ahead), steps = 12, w = span * .015;
   for (let i = 0; i < steps; i += 2) { const f0 = i / steps, f1 = (i + 1) / steps, la = lon + (al - lon) * f0, lb = lon + (al - lon) * f1, ta = lat + (aa - lat) * f0, tb = lat + (aa - lat) * f1;
     const nx = -Math.cos(pl.hdg * D2R) * w, ny = -Math.sin(pl.hdg * D2R) * w;
-    fx.push({ type: 'Feature', properties: { p: 'hdg', col: '#ffcc33', b: h, h: h + w * 2 }, geometry: { type: 'Polygon', coordinates: [[metersLL(la, ta, nx, ny), metersLL(lb, tb, nx, ny), metersLL(lb, tb, -nx, -ny), metersLL(la, ta, -nx, -ny), metersLL(la, ta, nx, ny)]] } }); }
+    fx.push({ type: 'Feature', properties: { p: 'hdg', col: '#9BF0E1', b: h, h: h + w * 2 }, geometry: { type: 'Polygon', coordinates: [[metersLL(la, ta, nx, ny), metersLL(lb, tb, nx, ny), metersLL(lb, tb, -nx, -ny), metersLL(la, ta, -nx, -ny), metersLL(la, ta, nx, ny)]] } }); }
   map.getSource('planeFx').setData(fc(fx));
 }
 function applyMode() {
