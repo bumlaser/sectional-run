@@ -116,7 +116,7 @@
 <div id="toast" hidden></div>
 <div id="sheet" class="sheet" hidden><div class="card" id="sheetCard"></div></div>
 
-<div id="title" class="overlay">
+<div id="title" class="overlay" hidden>
   <div class="card">
     <header class="bs-head"><h1>Sectional Run</h1>
     <h2>Frederick (FDK) → Bay Bridge (W29) · real airspace</h2></header>
@@ -1085,7 +1085,7 @@ function drawPlane() {
   if (cam.hz > .001) { ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(gx, gy, 10, 10 * cam.T, 0, 0, 6.283); ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(ax, ay); ctx.stroke(); ctx.setLineDash([]); }
   else { ctx.save(); ctx.translate(gx + 6, gy + 8); ctx.rotate(pl.hdg * D2R); ctx.globalAlpha = .3; planeSprite('#000', '#000'); ctx.restore(); }
   ctx.save(); ctx.translate(ax, ay); ctx.rotate(pl.hdg * D2R); planeSprite('#fbfbf6', '#1d3f7a'); ctx.restore();
-  ctx.strokeStyle = 'rgba(155,240,225,.9)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(...P(pl.x + Math.sin(pl.hdg * D2R) * 4, pl.y - Math.cos(pl.hdg * D2R) * 4, pl.alt)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(34,224,74,.95)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(...P(pl.x + Math.sin(pl.hdg * D2R) * 4, pl.y - Math.cos(pl.hdg * D2R) * 4, pl.alt)); ctx.stroke(); ctx.setLineDash([]);
   const tag = `${fmt(pl.alt)}${pl.tgt !== Math.round(pl.alt) ? (pl.tgt > pl.alt ? ' ↗ ' : ' ↘ ') + fmt(pl.tgt) : ''}`;
   ctx.font = `bold 12px ${UIF}`; const tw = ctx.measureText(tag).width + 12; panel(ax + 18, ay - 10, tw, 20); ctx.font = `bold 12px ${UIF}`; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(tag, ax + 23, ay + 1);
 }
@@ -1265,7 +1265,7 @@ function initNav() {
   if (!FEATURES.six) document.getElementById('bInst').hidden = true;
   if (!FEATURES.nav || typeof NavPanel === 'undefined') { document.getElementById('bNav').hidden = true; if (FEATURES.six) initSix(); return; }
   let pos = null; try { pos = JSON.parse(localStorage.getItem('sr.navpos') || 'null'); } catch (_) {}
-  nav = new NavPanel({ mount: document.body, open: W >= 900, position: pos || undefined,
+  nav = new NavPanel({ mount: document.body, open: false, position: pos || undefined,
     onMove: p => { try { localStorage.setItem('sr.navpos', JSON.stringify(p)); } catch (_) {} },
     onDirectTo: id => { const a = ANY(id); if (!a || !game) return; game.nav = { ...game.nav, wpt: id, origin: [pl.x, pl.y], direct: true }; flash(`Direct to ${id}: ${hdg3(brg(pl.x, pl.y, a.x, a.y) + VAR)}°, ${d2(a).toFixed(1)} NM`, '#ff9ae8', 2.6); },
     onAction: k => { if (k === 'bugdtk') { const w = ANY(game.nav.wpt) || DEST, o = game.nav.origin; pl.bug = brg(o[0], o[1], w.x, w.y); } else if (k === 'terrain' && typeof setTerrainOn === 'function') setTerrainOn(!terrainOn); else if (k === 'quiz') setQuiz(!quizOn); else if (k === 'air') setAir(!airOn); else if (k === 'traffic' && typeof setTraffic === 'function') setTraffic(!TRAFFIC.on); else if (k === 'speed') cycleSpeed(); else if (k === 'view') toggleView();
@@ -1506,7 +1506,7 @@ function updatePlane() {
   const ahead = [pl.x + Math.sin(pl.hdg * D2R) * 4, pl.y - Math.cos(pl.hdg * D2R) * 4], [al, aa] = toLL(...ahead), steps = 12, w = span * .015;
   for (let i = 0; i < steps; i += 2) { const f0 = i / steps, f1 = (i + 1) / steps, la = lon + (al - lon) * f0, lb = lon + (al - lon) * f1, ta = lat + (aa - lat) * f0, tb = lat + (aa - lat) * f1;
     const nx = -Math.cos(pl.hdg * D2R) * w, ny = -Math.sin(pl.hdg * D2R) * w;
-    fx.push({ type: 'Feature', properties: { p: 'hdg', col: '#9BF0E1', b: h, h: h + w * 2 }, geometry: { type: 'Polygon', coordinates: [[metersLL(la, ta, nx, ny), metersLL(lb, tb, nx, ny), metersLL(lb, tb, -nx, -ny), metersLL(la, ta, -nx, -ny), metersLL(la, ta, nx, ny)]] } }); }
+    fx.push({ type: 'Feature', properties: { p: 'hdg', col: '#22e04a', b: h, h: h + w * 2 }, geometry: { type: 'Polygon', coordinates: [[metersLL(la, ta, nx, ny), metersLL(lb, tb, nx, ny), metersLL(lb, tb, -nx, -ny), metersLL(la, ta, -nx, -ny), metersLL(la, ta, nx, ny)]] } }); }
   map.getSource('planeFx').setData(fc(fx));
 }
 function applyMode() {
@@ -1676,7 +1676,7 @@ function trafficTick(now) {
   map.getSource('live-flights-3d').setData({ type: 'FeatureCollection', features: vol });
 }
 
-function enableStart() { if (!(maskReady && mapReady)) return; const b = document.getElementById('startBtn'); b.disabled = false; b.textContent = 'Start flight'; }
+function enableStart() { if (!(maskReady && mapReady)) return; const b = document.getElementById('startBtn'); b.disabled = false; b.textContent = 'Start flight'; b.click(); }
 function mapReadyHook() { enableStart(); }
 </script>
 </html>
