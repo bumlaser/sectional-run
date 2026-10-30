@@ -1,0 +1,641 @@
+<title>Sectional Run</title>
+<style>
+  /* Chart-room arcade: sectional-paper map under a dark cockpit-panel UI. */
+  :root {
+    --ink:#f3efe2; --panel:rgba(12,17,22,.86); --amber:#ffcc33; --muted:#93a4b3;
+    --good:#8fe07a; --bad:#ff7a6b;
+    --display: Impact, "Arial Black", sans-serif; --body: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; --mono: "Courier New", ui-monospace, monospace;
+    color-scheme: dark;
+  }
+  html, body { height:100%; margin:0; background:#1b2617; color:var(--ink); font-family:var(--body); overflow:hidden; }
+  canvas { display:block; touch-action:none; }
+  [hidden] { display:none !important; }
+  button { font:bold 13px var(--mono); color:var(--ink); background:#1d252c; border:2px solid #000; box-shadow:2px 2px 0 #000;
+    padding:8px 4px; cursor:pointer; touch-action:manipulation; user-select:none; -webkit-user-select:none; }
+  button:active, button.on { background:var(--amber); color:#111; }
+  button:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+  #ctl { position:fixed; left:0; right:0; bottom:0; z-index:3; display:grid; gap:6px;
+    padding:8px max(12px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+    background:linear-gradient(transparent, rgba(8,12,16,.75) 22%); }
+  #ctl .row1 { display:grid; grid-template-columns:1fr 1fr; gap:8px; max-width:660px; width:100%; margin:0 auto; }
+  #ctl .grp { display:grid; grid-template-columns:52px 1fr 52px; gap:4px; background:var(--panel); border:2px solid rgba(255,204,51,.7); padding:4px; }
+  #ctl .grp button { font-size:20px; padding:6px 0; min-height:46px; }
+  .readout { display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.05; font-family:var(--mono); min-width:0; }
+  .readout small { font-size:10px; color:var(--muted); letter-spacing:1px; }
+  .readout b { font-size:19px; font-variant-numeric:tabular-nums; }
+  .readout .tgt { font-size:11px; color:var(--amber); white-space:nowrap; }
+  #ctl .row2 { display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); gap:5px; max-width:660px; width:100%; margin:0 auto; }
+  #ctl .row2 button { min-height:40px; font-size:12px; }
+  #landBtn { max-width:660px; width:100%; margin:0 auto; font:900 18px var(--display); letter-spacing:1px; background:var(--good); color:#111; min-height:46px; }
+  .sheet { position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; justify-content:center; padding:0 12px calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .sheet .card { width:100%; max-width:560px; background:#141a1f; border:3px solid var(--amber); box-shadow:0 0 0 4px #000, 0 -10px 40px rgba(0,0,0,.6);
+    padding:16px 18px; box-sizing:border-box; max-height:78vh; overflow:auto; touch-action:pan-y; }
+  .sheet h3 { margin:0 0 4px; font:900 20px var(--display); letter-spacing:1px; color:var(--amber); text-transform:uppercase; text-wrap:balance; }
+  .sheet .kicker { font:bold 11px var(--mono); color:var(--muted); letter-spacing:1px; margin-bottom:8px; }
+  .sheet p { margin:8px 0; line-height:1.45; }
+  .sheet .opts { display:grid; gap:8px; margin-top:10px; }
+  .sheet .opts button { text-align:left; font:15px var(--body); padding:11px 12px; line-height:1.3; }
+  .sheet .opts button.right { background:#2f6b2a; color:#fff; } .sheet .opts button.wrong { background:#7a2a22; color:#fff; }
+  .sheet .why { border-left:4px solid var(--amber); padding:6px 10px; background:rgba(255,204,51,.08); }
+  .sheet .actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .sheet .actions button { font:900 16px var(--display); letter-spacing:1px; background:var(--amber); color:#111; padding:10px 18px; }
+  .fac { display:grid; grid-template-columns:1fr auto; gap:4px 10px; align-items:center; padding:8px 0; border-bottom:1px solid #2a343c; }
+  .fac b { font-size:15px; } .fac small { color:var(--muted); font-family:var(--mono); } .fac button { font-size:12px; padding:8px 10px; }
+  #toast { position:fixed; left:50%; transform:translateX(-50%); top:calc(98px + env(safe-area-inset-top, 0px)); z-index:4; width:min(460px, calc(100% - 32px));
+    background:rgba(250,248,240,.97); color:#18222b; border:2px solid #000; box-shadow:3px 3px 0 #000; padding:10px 12px; box-sizing:border-box; font-size:13px; line-height:1.4; max-height:45vh; overflow:auto; }
+  #toast b { color:#0d3f7a; } #toast .x { float:right; font-weight:bold; cursor:pointer; padding-left:8px; }
+  #toast div + div { margin-top:4px; padding-top:4px; border-top:1px solid #d9d3c3; }
+  .overlay { position:fixed; inset:0; z-index:8; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,.5), rgba(0,0,0,.88)); touch-action:pan-y; }
+  .overlay .card { width:100%; max-width:720px; max-height:100%; overflow:auto; background:#141a1f; border:3px solid var(--amber); box-shadow:0 0 0 6px #000; padding:22px 24px; box-sizing:border-box; }
+  .overlay h1 { margin:0 0 4px; font:900 42px/1 var(--display); letter-spacing:2px; color:var(--amber); text-shadow:3px 3px 0 #000; text-transform:uppercase; text-wrap:balance; }
+  .overlay h2 { margin:0 0 14px; font:bold 13px var(--mono); letter-spacing:2px; color:#9fb3c3; text-transform:uppercase; }
+  .overlay p { line-height:1.5; margin:8px 0; } .overlay ul { margin:8px 0; padding-left:20px; line-height:1.5; }
+  .overlay .go { font:900 22px var(--display); letter-spacing:2px; background:var(--amber); color:#111; padding:10px 26px; margin-top:12px; box-shadow:4px 4px 0 #000; }
+  .notam { font-family:var(--mono); font-size:13px; background:#0b0f13; border:1px dashed #50606d; padding:8px 10px; margin:10px 0; line-height:1.5; }
+  .fine { font-size:12px; color:#8c9aa6; }
+  table { border-collapse:collapse; width:100%; font-size:14px; margin:10px 0; }
+  td { padding:4px 6px; border-bottom:1px solid #2a343c; } td.pts { text-align:right; font-family:var(--mono); font-weight:bold; font-variant-numeric:tabular-nums; }
+  .pos { color:var(--good); } .neg { color:var(--bad); }
+  .grade { float:right; font:900 68px var(--display); color:var(--amber); text-shadow:4px 4px 0 #000; margin-left:12px; }
+</style>
+
+<canvas id="c" aria-label="Sectional chart map"></canvas>
+<div id="ctl">
+  <button id="landBtn" type="button" hidden>LAND AT BAY BRIDGE</button>
+  <div class="row1">
+    <div class="grp" aria-label="Heading">
+      <button type="button" id="bLeft" aria-label="Turn left">◀</button>
+      <div class="readout"><small>HDG</small><b id="rHdg">095°</b><span class="tgt" id="rCrs">W29 102°</span></div>
+      <button type="button" id="bRight" aria-label="Turn right">▶</button>
+    </div>
+    <div class="grp" aria-label="Altitude">
+      <button type="button" id="bDown" aria-label="Descend 500 feet">▼</button>
+      <div class="readout"><small>ALT MSL</small><b id="rAlt">1,800</b><span class="tgt" id="rTgt">→ 2,500</span></div>
+      <button type="button" id="bUp" aria-label="Climb 500 feet">▲</button>
+    </div>
+  </div>
+  <div class="row2">
+    <button type="button" id="bRadio">RADIO</button>
+    <button type="button" id="bView">3D</button>
+    <button type="button" id="bChart">TAC</button>
+    <button type="button" id="bSpeed">8×</button>
+    <button type="button" id="bZout" aria-label="Zoom out">−</button>
+    <button type="button" id="bZin" aria-label="Zoom in">+</button>
+    <button type="button" id="bPause" aria-label="Pause">II</button>
+  </div>
+</div>
+<div id="toast" hidden></div>
+<div id="sheet" class="sheet" hidden><div class="card" id="sheetCard"></div></div>
+
+<div id="title" class="overlay">
+  <div class="card">
+    <h1>Sectional Run</h1>
+    <h2>Frederick (FDK) → Bay Bridge (W29) · real airspace</h2>
+    <p>You've just departed <b>Frederick Muni</b> in <b>N421AP</b>, headed for <b>Bay Bridge</b> on Kent Island. The plane holds 110 knots on its own, so you only steer and pick altitudes. Nothing stalls and nothing crashes. The challenge is reading the chart. The direct line runs straight through the Washington DC SFRA, so you'll need to plan around it, slip under the Baltimore Bravo shelves, and answer checkride questions along the way.</p>
+    <div class="notam" id="briefNotam"></div>
+    <ul>
+      <li><b>◀ ▶</b> turn (hold) · <b>▲ ▼</b> change target altitude by 500 ft</li>
+      <li><b>RADIO</b> call Potomac Approach, a tower, or self-announce on the CTAF</li>
+      <li><b>3D</b> shows the airspace as stacked slabs · <b>TAC</b> swaps in the real FAA chart</li>
+      <li>Tap anything on the map to find out what it is · pinch or <b>− +</b> to zoom · drag to look around</li>
+      <li>Keyboard: ← → turn, ↑ ↓ altitude, R radio, V 3D, C chart, X speed, P pause, L land</li>
+    </ul>
+    <button class="go" id="startBtn" type="button" disabled>Loading chart…</button>
+    <p class="fine">Airspace, airports, obstacles and VORs come from FAA ADDS data. Water and towns are traced from the FAA Baltimore–Washington TAC. The SFRA and FRZ are approximate rings, and terrain heights are estimated. This is a practice game: not for navigation, and no substitute for current charts, NOTAMs and SFRA training.</p>
+  </div>
+</div>
+<div id="end" class="overlay" hidden><div class="card" id="endCard"></div></div>
+
+<script>
+'use strict';
+const WD = __WORLD__;
+const TAC_SRC = '__TAC__';
+// ====================================================================
+//  Helpers
+// ====================================================================
+const D2R = Math.PI / 180, VAR = 11, TAS = 110, NMPS = TAS / 3600;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const norm = h => ((h % 360) + 360) % 360;
+const angDiff = (a, b) => ((a - b + 540) % 360) - 180;
+const hdg3 = h => String(Math.round(norm(h)) || 360).padStart(3, '0');
+const fmt = n => Math.round(n).toLocaleString('en-US');
+const brg = (x0, y0, x1, y1) => norm(Math.atan2(x1 - x0, -(y1 - y0)) / D2R);
+function hash2(i, j, s = 0) { let h = (i * 374761393 + j * 668265263 + s * 2147483647) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, y, s) { const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+  const a = hash2(xi, yi, s), b = hash2(xi + 1, yi, s), c = hash2(xi, yi + 1, s), d = hash2(xi + 1, yi + 1, s); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
+function fbm(x, y, s) { return .55 * vnoise(x, y, s) + .3 * vnoise(x * 2.1, y * 2.1, s + 1) + .15 * vnoise(x * 4.3, y * 4.3, s + 2); }
+function inRings(x, y, rings) { let c = false; for (const p of rings) for (let i = 0, j = p.length - 1; i < p.length; j = i++) { const [xi, yi] = p[i], [xj, yj] = p[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; }
+function distSeg(px, py, a, b) { const dx = b[0] - a[0], dy = b[1] - a[1], l = dx * dx + dy * dy; const u = l ? clamp(((px - a[0]) * dx + (py - a[1]) * dy) / l, 0, 1) : 0; return Math.hypot(px - a[0] - u * dx, py - a[1] - u * dy); }
+function edgeDist(x, y, rings) { let d = 1e9; for (const p of rings) for (let i = 0; i < p.length; i++) d = Math.min(d, distSeg(x, y, p[i], p[(i + 1) % p.length])); return d; }
+const toNM = (lat, lon) => [(lon - WD.reg.clon) * 60 * WD.reg.cos, -(lat - WD.reg.clat) * 60];
+
+// ====================================================================
+//  World from FAA data
+// ====================================================================
+const R = WD.reg, WORLD = { x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1 };
+const AIRPORTS = WD.aps, AP = Object.fromEntries(AIRPORTS.map(a => [a.id, a]));
+const START = AP.FDK, DEST = AP.W29;
+const TOWER_NAMES = { FDK: 'Frederick Tower', MTN: 'Martin State Tower', ESN: 'Easton Tower', HGR: 'Hagerstown Tower', MRB: 'Martinsburg Tower', HEF: 'Manassas Tower', DAA: 'Davison Tower', NYG: 'Quantico Tower' };
+const VOL = WD.vols.map((v, i) => {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const r of v.r) for (const [x, y] of r) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  const grp = v.k === 'B' ? 'B' : v.k === 'D' ? 'D:' + v.id : v.k === 'R' || v.k === 'P' || v.k === 'MOA' ? v.k + ':' + v.n.replace(/[A-C]$/, '') : v.k;
+  return { ...v, i, grp, bb: [x0, y0, x1, y1] };
+});
+const horiz = (v, x, y) => x >= v.bb[0] && x <= v.bb[2] && y >= v.bb[1] && y <= v.bb[3] && inRings(x, y, v.r);
+const insideVol = (v, x, y, alt) => alt >= v.fl && alt < v.ce && horiz(v, x, y);
+const volDist = (v, x, y) => horiz(v, x, y) ? 0 : edgeDist(x, y, v.r);
+const RULED = ['B', 'D', 'SFRA', 'FRZ', 'P', 'R', 'MOA'];
+const TOWERS = WD.obs;
+const VORS = WD.vors.map(v => ({ ...v, r: 5 }));
+const CHECKPOINTS = [['LIBERTY RES', 39.405, -76.905], ['LOCH RAVEN RES', 39.44, -76.545], ['PRETTYBOY RES', 39.625, -76.72], ['SPARROWS POINT', 39.215, -76.475], ['BAY BRIDGE', 38.993, -76.383], ['SUGARLOAF MTN', 39.263, -77.394]]
+  .map(([n, la, lo]) => { const [x, y] = toNM(la, lo); return [n, x, y]; });
+// estimated ground elevation: inverse-distance blend of airport elevations (no terrain model in this prototype)
+function elevRaw(x, y) { let s = 0, w = 0; for (const a of AIRPORTS) { const d2 = (x - a.x) ** 2 + (y - a.y) ** 2 + 4, k = 1 / (d2 * d2); s += a.e * k; w += k; } return s / w; }
+const EG = 2, ENX = Math.ceil((WORLD.x1 - WORLD.x0) / EG) + 1, ENY = Math.ceil((WORLD.y1 - WORLD.y0) / EG) + 1, EGRID = new Float32Array(ENX * ENY);
+for (let j = 0; j < ENY; j++) for (let i = 0; i < ENX; i++) EGRID[j * ENX + i] = elevRaw(WORLD.x0 + i * EG, WORLD.y0 + j * EG);
+function elev(x, y) { const fx = clamp((x - WORLD.x0) / EG, 0, ENX - 1.001), fy = clamp((y - WORLD.y0) / EG, 0, ENY - 1.001), i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j;
+  const g = (a, b) => EGRID[b * ENX + a]; const e = g(i, j) * (1 - u) * (1 - v) + g(i + 1, j) * u * (1 - v) + g(i, j + 1) * (1 - u) * v + g(i + 1, j + 1) * u * v; return isWater(x, y) ? 0 : e; }
+
+// land / water / town mask traced from the TAC (10 px per nm)
+let MASK = null, MW = 0, MH = 0;
+function maskAt(x, y) { if (!MASK) return 0; const i = Math.floor((x - WORLD.x0) * R.maskPx), j = Math.floor((y - WORLD.y0) * R.maskPx); if (i < 0 || j < 0 || i >= MW || j >= MH) return 0; return MASK[j * MW + i]; }
+const isWater = (x, y) => maskAt(x, y) === 1, isTown = (x, y) => maskAt(x, y) === 2;
+
+// ====================================================================
+//  Base map (stylized) — built after the mask loads
+// ====================================================================
+const PXN = 22, CS = .32;
+const CROPS = ['#7d9a4b', '#8fa957', '#a9a65d', '#c2b071', '#6f8f43', '#99b062', '#b89f62', '#88a35a', '#7a9550', '#a3b56c'];
+let NI, NJ, CELLS, base = null, tacImg = null;
+const cellAt = (i, j) => CELLS[j * NI + i];
+function buildBase() {
+  NI = Math.round((WORLD.x1 - WORLD.x0) / CS); NJ = Math.round((WORLD.y1 - WORLD.y0) / CS); CELLS = new Array(NI * NJ);
+  for (let j = 0; j < NJ; j++) for (let i = 0; i < NI; i++) {
+    const x = WORLD.x0 + (i + .5) * CS, y = WORLD.y0 + (j + .5) * CS, m = maskAt(x, y);
+    if (m === 1) { CELLS[j * NI + i] = { t: 'water' }; continue; }
+    if (m === 2) { CELLS[j * NI + i] = { t: 'city' }; continue; }
+    const f = fbm(x * .35, y * .35, 3), e = elev(x, y);
+    if (f > .63 || (e > 600 && f > .5)) { CELLS[j * NI + i] = { t: 'forest' }; continue; }
+    const bj = Math.floor(j / 3), bw = 2 + Math.floor(hash2(0, bj, 7) * 3), bi = Math.floor((i + bj % 3) / bw);
+    CELLS[j * NI + i] = { t: 'field', blk: bi * 4096 + bj, c: CROPS[Math.floor(hash2(bi, bj, 1) * CROPS.length)], rows: hash2(bi, bj, 2) < .6, rot: hash2(bi, bj, 6) < .5 };
+  }
+  base = document.createElement('canvas'); base.width = Math.round((WORLD.x1 - WORLD.x0) * PXN); base.height = Math.round((WORLD.y1 - WORLD.y0) * PXN);
+  const g = base.getContext('2d'); g.setTransform(PXN, 0, 0, PXN, -WORLD.x0 * PXN, -WORLD.y0 * PXN);
+  g.fillStyle = '#6f8f4a'; g.fillRect(WORLD.x0, WORLD.y0, WORLD.x1 - WORLD.x0, WORLD.y1 - WORLD.y0);
+  for (let j = 0; j < NJ; j++) for (let i = 0; i < NI; i++) {
+    const c = cellAt(i, j), x0 = WORLD.x0 + i * CS, y0 = WORLD.y0 + j * CS;
+    if (c.t === 'field') { g.fillStyle = c.c; g.fillRect(x0, y0, CS + .01, CS + .01); }
+    else if (c.t === 'forest') { g.fillStyle = '#3c6332'; g.fillRect(x0, y0, CS + .01, CS + .01);
+      for (let k = 0; k < 4; k++) { g.fillStyle = k % 2 ? '#4a7a3c' : '#2f5229'; g.beginPath(); g.arc(x0 + hash2(i, j, 10 + k) * CS, y0 + hash2(i, j, 20 + k) * CS, .07 + hash2(i, j, 30 + k) * .05, 0, 6.283); g.fill(); } }
+    else if (c.t === 'city') { g.fillStyle = '#bdb6a3'; g.fillRect(x0, y0, CS + .01, CS + .01); g.fillStyle = '#a09a8c';
+      for (let k = 0; k < 6; k++) g.fillRect(x0 + .03 + (k % 3) * .1, y0 + .04 + Math.floor(k / 3) * .14, .07, .09); }
+    else { g.fillStyle = '#93c6e4'; g.fillRect(x0, y0, CS + .01, CS + .01); }
+  }
+  g.strokeStyle = '#4f6b35'; g.lineWidth = .035; g.beginPath();
+  for (let j = 0; j < NJ - 1; j++) for (let i = 0; i < NI - 1; i++) { const c = cellAt(i, j); if (c.t !== 'field') continue; const x0 = WORLD.x0 + i * CS, y0 = WORLD.y0 + j * CS, r = cellAt(i + 1, j), d = cellAt(i, j + 1);
+    if (r.t === 'field' && r.blk !== c.blk) { g.moveTo(x0 + CS, y0); g.lineTo(x0 + CS, y0 + CS); } if (d.t === 'field' && d.blk !== c.blk) { g.moveTo(x0, y0 + CS); g.lineTo(x0 + CS, y0 + CS); } }
+  g.stroke();
+  // crisp water from the full-resolution mask, with a shoreline
+  const mc = document.createElement('canvas'); mc.width = MW; mc.height = MH; const mg = mc.getContext('2d'), id = mg.createImageData(MW, MH);
+  for (let k = 0; k < MW * MH; k++) { const w = MASK[k] === 1; id.data[k * 4] = 147; id.data[k * 4 + 1] = 198; id.data[k * 4 + 2] = 228; id.data[k * 4 + 3] = w ? 255 : 0; }
+  mg.putImageData(id, 0, 0);
+  g.save(); g.imageSmoothingEnabled = true; g.globalAlpha = 1;
+  g.shadowColor = '#3f86bf'; g.shadowBlur = 3; g.drawImage(mc, WORLD.x0, WORLD.y0, MW / R.maskPx, MH / R.maskPx); g.restore();
+  // sectional yellow over towns + gentle relief
+  g.fillStyle = 'rgba(246,222,96,.45)'; for (let j = 0; j < NJ; j++) for (let i = 0; i < NI; i++) if (cellAt(i, j).t === 'city') g.fillRect(WORLD.x0 + i * CS, WORLD.y0 + j * CS, CS + .01, CS + .01);
+  for (let j = 0; j < NJ; j++) for (let i = 0; i < NI; i++) { const c = cellAt(i, j); if (c.t === 'water') continue; const x = WORLD.x0 + (i + .5) * CS, y = WORLD.y0 + (j + .5) * CS;
+    const n = (fbm(x * .5, y * .5, 11) - .5) * (.4 + elev(x, y) / 900); if (Math.abs(n) > .05) { g.fillStyle = n > 0 ? `rgba(255,250,230,${n * .3})` : `rgba(20,30,10,${-n * .4})`; g.fillRect(WORLD.x0 + i * CS, WORLD.y0 + j * CS, CS + .01, CS + .01); } }
+}
+
+// ====================================================================
+//  State
+// ====================================================================
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize() { DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * DPR; cv.height = H * DPR; cv.style.width = W + 'px'; cv.style.height = H + 'px'; }
+addEventListener('resize', resize); resize();
+const cam = { cx: 0, cy: 0, s: 20, T: 1, hz: 0, yc: .5, px: 0, py: 0, lastPan: -99, view: '2d', chart: false };
+let pl, game, simRate = 8, paused = false, running = false;
+const hold = { left: false, right: false }, keys = {};
+const SUA_STATUS = {};
+function newGame() {
+  const [sx, sy] = [START.x + .9, START.y + .5];
+  pl = { x: sx, y: sy, hdg: 112, alt: 1800, tgt: 2500, vs: 0 };
+  for (const v of VOL) if (v.k === 'R') SUA_STATUS[v.grp] = /CONT|0000-2400/i.test(v.tou) ? true : (SUA_STATUS[v.grp] ?? Math.random() < .6);
+  game = { t: 0, score: 0, log: [], over: false, inside: {}, contact: { 'D:FDK': true }, clrB: null, asked: {}, quiz: null, correct: 0, quizzes: 0, levelT: 0,
+    hemiSegs: {}, towerHits: {}, cityHit: false, ctaf: false, viol: 0, radioLog: [], warned: {}, seenUnder: null };
+  game.radioLog.push({ who: 'TWR', text: 'N421AP, Frederick Tower, departure approved, frequency change approved when clear of the Delta.', t: 0 });
+  cam.cx = pl.x; cam.cy = pl.y; cam.px = cam.py = 0; cam.s = clamp(Math.min(W, H) / 18, 14, 40);
+  document.getElementById('briefNotam').innerHTML = briefing(); updateLand(true);
+}
+function rStatusLine() { const seen = new Set(); return VOL.filter(v => v.k === 'R' && !seen.has(v.grp) && seen.add(v.grp)).map(v => `${v.grp.slice(2)} ${SUA_STATUS[v.grp] ? '<b>HOT</b>' : 'COLD'}`).join(' · '); }
+function briefing() {
+  const crs = hdg3(brg(START.x, START.y, DEST.x, DEST.y) + VAR), dist = Math.hypot(DEST.x - START.x, DEST.y - START.y).toFixed(0);
+  return `ROUTE FDK → W29 · DIRECT ${crs}° MAG · ${dist} NM · VAR ${VAR}°W<br>WX: VFR, CLEAR, VIS 10SM, WIND CALM<br>SUA TODAY: ${rStatusLine()}<br>NO SFRA FLIGHT PLAN FILED · STAY OUT OF THE DC SFRA`;
+}
+const flashes = [];
+function flash(text, color = '#ffcc33', life = 2.8) { flashes.push({ text, color, life, max: life }); if (flashes.length > 4) flashes.shift(); }
+function addScore(pts, label) { game.score += pts; game.log.push({ label, pts }); flash((pts > 0 ? '+' : '') + pts + '  ' + label, pts >= 0 ? '#9df27f' : '#ff7a6b'); }
+function radioMsg(who, text) { game.radioLog.push({ who, text, t: game.t }); if (game.radioLog.length > 14) game.radioLog.shift(); }
+const d2 = a => Math.hypot(pl.x - a.x, pl.y - a.y);
+const grpVols = g => VOL.filter(v => v.grp === g);
+const nearGrp = g => Math.min(...grpVols(g).map(v => volDist(v, pl.x, pl.y)));
+const firstVol = k => VOL.find(v => v.k === k);
+const label100 = n => n === 0 ? 'SFC' : String(Math.round(n / 100));
+
+// ====================================================================
+//  Checkride questions tied to real chart features
+// ====================================================================
+const vFDK = VOL.find(v => v.k === 'D' && v.id === 'FDK'), vMTN = VOL.find(v => v.k === 'D' && v.id === 'MTN');
+const vP40 = VOL.find(v => v.n === 'P-40'), vR4009 = VOL.find(v => v.n === 'R-4009');
+const QUIZ = [
+  { id: 'fdk', when: () => game.t > 5, kicker: 'Frederick Class D', q: `Frederick's dashed blue Class D shows ${label100(vFDK.ce)} in a dashed box. What does that mean?`,
+    a: [`The Class D goes up to ${fmt(vFDK.ce)} ft MSL`, `The Class D starts at ${fmt(vFDK.ce)} ft MSL`, `The tower closes at ${label100(vFDK.ce)}00 local`],
+    why: `The boxed number is the Class D ceiling in hundreds of feet MSL. Frederick's runs from the surface to ${fmt(vFDK.ce)} MSL, and tower has already let you go.` },
+  { id: 'p40', when: () => vP40 && volDist(vP40, pl.x, pl.y) < 9, kicker: 'P-40 · Camp David', q: 'P-40 is ahead, with R-4009 on top of it. What can you do?',
+    a: [`Stay clear: P-40 is prohibited from the surface to ${fmt(vP40.ce)} and R-4009 covers ${fmt(vR4009.fl)} to ${fmt(vR4009.ce)}`, 'Overfly it above 3,000 ft', 'Enter if you\'re talking to Potomac Approach'],
+    why: 'P-40 protects Camp David. Nobody flies in a prohibited area, and the restricted area stacked above means you can\'t just climb over it either. Go around.' },
+  { id: 'modec', when: () => game.asked.fdk && game.t > 20 && game.inside.MODEC, kicker: 'Mode C veil', q: () => `You're inside the thin magenta 30 NM ring around ${({ BWI: 'BWI', IAD: 'Dulles (IAD)', DCA: 'Reagan National (DCA)', ADW: 'Andrews (ADW)' })[game.inside.MODEC.id] || 'a Class B airport'}, the Mode C veil. What does your airplane need inside it?`,
+    a: ['A Mode C (altitude-reporting) transponder and ADS-B Out, from the surface up to 10,000 ft MSL', 'An explicit Class B clearance', 'Two-way radio communication with BWI tower'],
+    why: 'The Mode C veil is an equipment rule, not airspace you need permission for. Within 30 NM of a Class B primary airport you need an altitude-encoding transponder and ADS-B Out.' },
+  { id: 'bReq', when: () => nearGrp('B') < 2.5, kicker: 'Washington Tri-Area Class B', q: 'The solid blue lines ahead are the Washington Tri-Area Class B. What do you need to enter it?',
+    a: ['An explicit clearance: "cleared into the Class Bravo airspace"', 'Two-way radio communication is enough', 'Just a Mode C transponder'],
+    why: 'Class B is the only class that requires an explicit clearance. Potomac Approach saying your callsign isn\'t enough; listen for "cleared into the Class Bravo".' },
+  { id: 'bShelf', when: () => { const v = VOL.find(v => v.k === 'B' && v.fl > 0 && horiz(v, pl.x, pl.y) && pl.alt < v.fl); if (v) game.seenUnder = v; return !!v && game.asked.bReq; }, kicker: 'Under the Bravo',
+    q: () => `You're at ${fmt(pl.alt)} under the shelf labeled ${label100(game.seenUnder.ce)} over ${label100(game.seenUnder.fl)}. Are you in the Class B?`,
+    a: () => [`No. This shelf's floor is ${fmt(game.seenUnder.fl)} MSL, so you're underneath it`, 'Yes, everything inside the blue line is Class B', 'Only if you\'re within 500 ft of the floor'],
+    why: () => `Class B is an upside-down wedding cake. This shelf runs from ${fmt(game.seenUnder.fl)} to ${fmt(game.seenUnder.ce)} MSL. Stay below ${fmt(game.seenUnder.fl)}, with a buffer, and you don't need a clearance.` },
+  { id: 'sfra', when: () => game.asked.fdk && game.t > 40 && nearGrp('SFRA') < 7, kicker: 'Washington DC SFRA', q: 'The heavy boundary ahead is the Washington DC SFRA. What do you need to fly VFR inside it?',
+    a: ['SFRA training, a flight plan, a discrete transponder code, and two-way communication with ATC', 'Just a Mode C transponder', 'Nothing below 3,000 ft'],
+    why: 'The SFRA (Special Flight Rules Area) requires completed SFRA training, an SFRA flight plan, a discrete squawk, and two-way comms the whole time. You didn\'t file one today, so stay outside.' },
+  { id: 'tower', when: () => { const t = TOWERS.find(t => t.a >= 900 && Math.hypot(pl.x - t.x, pl.y - t.y) < 3.5); if (t) game.qTower = t; return !!t; }, kicker: 'Obstacles',
+    q: () => `The obstacle ahead is labeled ${game.qTower.m} with (${game.qTower.a}) underneath. What do the numbers mean?`,
+    a: () => [`Its top is ${fmt(game.qTower.m)} ft MSL, and it stands ${fmt(game.qTower.a)} ft above the ground`, `Its top is ${fmt(game.qTower.a)} ft MSL, and it stands ${fmt(game.qTower.m)} ft above the ground`, `The minimum altitude nearby is ${fmt(game.qTower.m)} ft`],
+    why: 'The bold number is the obstacle\'s top in feet MSL, and the number in parentheses is its height above ground level. Towers this tall often have guy wires spreading well out from the base.' },
+  { id: 'city', when: () => isTown(pl.x, pl.y) && d2(AP.BWI) < 22 && pl.alt - elev(pl.x, pl.y) < 2600, kicker: 'Congested area', q: 'You\'re over the yellow congested area around Baltimore. What\'s the minimum altitude here?',
+    a: ['1,000 ft above the highest obstacle within 2,000 ft horizontally', '500 ft above the ground', '1,000 ft AGL only at night'],
+    why: 'Over congested areas, 14 CFR 91.119 requires 1,000 ft above the highest obstacle within a horizontal radius of 2,000 ft. Over open country it\'s 500 ft from any person or structure.' },
+  { id: 'mtn', when: () => vMTN && d2(AP.MTN) < 9, kicker: 'Martin State Class D', q: () => `Martin State's Class D shows a dashed box with ${label100(vMTN.ce)}. Where can you overfly it without calling the tower?`,
+    a: [`Above ${fmt(vMTN.ce)} ft MSL`, `Above ${fmt(vMTN.ce)} ft AGL`, 'Nowhere. You always have to call'],
+    why: `Class D ends at its ceiling: ${fmt(vMTN.ce)} MSL here. Above that you're out of it. Check the Bravo shelves overhead before you climb, though.` },
+  { id: 'r4001', when: () => nearGrp('R:R-4001') < 8, kicker: 'R-4001 Aberdeen', q: () => `R-4001 at Aberdeen is ${SUA_STATUS['R:R-4001'] ? 'HOT' : 'COLD'} today. Can you fly through it?`,
+    a: () => SUA_STATUS['R:R-4001'] ? ['No, not without permission from the controlling agency', 'Yes, VFR may always transit', 'Yes, above 3,000 ft'] : ['Yes. When it isn\'t active you may transit', 'No, restricted areas are always closed', 'Only on an IFR flight plan'],
+    why: () => SUA_STATUS['R:R-4001'] ? 'Aberdeen Proving Ground fires live ordnance. When it\'s active, stay out.' : 'Restricted areas are only off-limits while active, but always confirm the status with flight service or ATC.' },
+  { id: 'vor', when: () => d2(VORS.find(v => v.id === 'BAL') || START) < 6 && game.t > 30, kicker: 'Baltimore VORTAC', q: 'The compass rose around the Baltimore VORTAC is aligned with…',
+    a: ['Magnetic north', 'True north', 'Runway 15 at BWI'], why: `VOR roses are oriented to magnetic north, so they're rotated about ${VAR}° from true north around here.` },
+  { id: 'dest', when: () => d2(DEST) < 14, kicker: 'Bay Bridge (W29)', q: 'Bay Bridge\'s airport symbol is magenta. What does that mean for your arrival?',
+    a: ['No tower. Self-announce your position and intentions on the CTAF', 'Call the tower for a landing clearance', 'It\'s a private field, so you can\'t land'],
+    why: 'Magenta symbols mark airports without a control tower. Announce on the CTAF ("Bay Bridge traffic…"), enter the pattern, and keep your eyes open.' },
+];
+function hemiQuiz() {
+  const crs = norm(pl.hdg + VAR), east = crs < 180, right = east ? [3500, 5500, 7500, 9500] : [4500, 6500, 8500, 10500];
+  const pickR = right.reduce((b, a) => Math.abs(a - pl.alt) < Math.abs(b - pl.alt) ? a : b), w1 = pickR + 1000 * (pickR > 4000 ? -1 : 1), w2 = Math.round(pl.alt / 1000) * 1000;
+  return { id: 'hemi', kicker: 'VFR cruising altitude', q: `You're cruising on a magnetic course of ${hdg3(crs)}°, more than 3,000 ft AGL. Which altitude is correct?`,
+    a: [fmt(pickR), fmt(w1), fmt(w2 === pickR || w2 === w1 ? pickR + 500 : w2)],
+    why: `Above 3,000 ft AGL, VFR cruising altitudes follow magnetic course. 000°–179° use odd thousands plus 500, and 180°–359° use even thousands plus 500. Under the Bravo shelves you'll often be lower than 3,000 AGL, where the rule doesn't apply.` };
+}
+function checkQuizzes() {
+  if (game.quiz || !running) return;
+  for (const q of QUIZ) if (!game.asked[q.id] && q.when()) return openQuiz(q);
+  if (!game.asked.hemi && game.levelT > 25 && pl.alt - elev(pl.x, pl.y) > 3000) openQuiz(hemiQuiz());
+}
+const val = f => typeof f === 'function' ? f() : f;
+function openQuiz(q) {
+  game.asked[q.id] = true; game.quizzes++;
+  const opts = val(q.a).map((t, i) => ({ t, ok: i === 0 })); for (let i = opts.length - 1; i > 0; i--) { const k = Math.floor(Math.random() * (i + 1)); [opts[i], opts[k]] = [opts[k], opts[i]]; }
+  game.quiz = { q, opts, done: false, why: val(q.why) };
+  document.getElementById('sheetCard').innerHTML = `<div class="kicker">CHECKRIDE QUESTION · ${q.kicker.toUpperCase()}</div><h3>${val(q.q)}</h3><div class="opts">${opts.map((o, i) => `<button type="button" data-opt="${i}">${o.t}</button>`).join('')}</div><div id="qResult"></div>`;
+  showSheet(true);
+}
+function answerQuiz(i) {
+  const Q = game.quiz; if (!Q || Q.done) return; Q.done = true; const o = Q.opts[i];
+  document.querySelectorAll('#sheetCard [data-opt]').forEach((b, k) => { b.disabled = true; if (Q.opts[k].ok) b.classList.add('right'); else if (k === i) b.classList.add('wrong'); });
+  if (o.ok) { game.correct++; addScore(100, 'Correct: ' + Q.q.kicker); } else addScore(-25, 'Missed: ' + Q.q.kicker);
+  document.getElementById('qResult').innerHTML = `<p class="why">${o.ok ? '<b>Correct.</b> ' : '<b>Not quite.</b> '}${Q.why}</p><div class="actions"><button type="button" data-close>Continue flight</button></div>`;
+}
+
+// ====================================================================
+//  Radio
+// ====================================================================
+function facilities() {
+  const list = [];
+  if (d2(AP.BWI) < 45) list.push({ g: 'B', name: 'Potomac Approach', note: 'Class B / flight following', x: AP.BWI.x, y: AP.BWI.y, act: 'Request Bravo transition' });
+  for (const v of VOL) if (v.k === 'D' && AP[v.id] && d2(AP[v.id]) < 14 && !list.some(f => f.g === v.grp)) list.push({ g: v.grp, name: TOWER_NAMES[v.id] || AP[v.id].n + ' Tower', note: `Class D to ${fmt(v.ce)}`, x: AP[v.id].x, y: AP[v.id].y, act: 'Call' });
+  if (d2(DEST) < 16) list.push({ g: 'CTAF', name: 'Bay Bridge CTAF', note: 'self-announce (no tower)', x: DEST.x, y: DEST.y, act: 'Announce' });
+  return list;
+}
+function posn(x, y) { const d = Math.hypot(pl.x - x, pl.y - y), b = brg(x, y, pl.x, pl.y); return `${Math.round(d)} miles ${['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(b / 45) % 8]} at ${fmt(pl.alt)}`; }
+function openRadio() {
+  const rows = facilities().map(f => { const st = f.g === 'B' && game.clrB ? '<span class="pos">CLEARED ✓</span>' : game.contact[f.g] ? '<span class="pos">TWO-WAY ✓</span>' : f.g === 'CTAF' && game.ctaf ? '<span class="pos">ANNOUNCED ✓</span>' : '';
+    return `<div class="fac"><div><b>${f.name}</b> ${st}<br><small>${f.note} · ${Math.hypot(pl.x - f.x, pl.y - f.y).toFixed(0)} NM</small></div><button type="button" data-call="${f.g}">${f.act}</button></div>`; }).join('');
+  const fss = `<div class="fac"><div><b>Leesburg Radio (Flight Service)</b><br><small>special use airspace status</small></div><button type="button" data-call="FSS">SUA status?</button></div>`;
+  const log = game.radioLog.slice(-4).map(m => `<p style="margin:4px 0;font-family:var(--mono);font-size:12px;color:${m.who === 'YOU' ? '#9fd3ff' : '#9df27f'}">${m.who}: ${m.text}</p>`).join('');
+  document.getElementById('sheetCard').innerHTML = `<div class="kicker">RADIO · N421AP</div><h3>Who do you want to call?</h3>${rows || '<p>No approach, tower or CTAF in range.</p>'}${fss}${log ? '<div style="margin-top:10px">' + log + '</div>' : ''}<div class="actions"><button type="button" data-close>Close</button></div>`;
+  showSheet(true);
+}
+function call(g) {
+  if (g === 'FSS') { radioMsg('YOU', 'Leesburg Radio, N421AP, request status of the restricted areas along the bay.'); radioMsg('FSS', `N421AP, ${rStatusLine().replace(/<\/?b>/g, '')}. And remember, no SFRA flight plan on file for you.`); return openRadio(); }
+  const f = facilities().find(f => f.g === g); if (!f) return;
+  if (g === 'B') {
+    radioMsg('YOU', `Potomac Approach, N421AP, ${posn(AP.BWI.x, AP.BWI.y)} of BWI, request Class Bravo transition eastbound to Bay Bridge.`);
+    if (Math.random() < .65) { const maxA = clamp(Math.ceil(pl.alt / 500) * 500, 2500, 4500); game.clrB = { maxA }; game.contact.B = true; radioMsg('ATC', `N421AP, squawk 4211, radar contact. Cleared into the Class Bravo airspace, maintain VFR at or below ${fmt(maxA)}.`); }
+    else { game.contact.B = true; radioMsg('ATC', 'N421AP, radar contact. Remain outside Class Bravo airspace, traffic volume. Flight following approved.'); }
+  } else if (g.startsWith('D:')) {
+    radioMsg('YOU', `${f.name}, N421AP, ${posn(f.x, f.y)}, transitioning your Delta eastbound.`);
+    if (Math.random() < .85) { game.contact[g] = true; radioMsg('TWR', `N421AP, ${f.name}, transition approved, report clear of the Delta.`); }
+    else radioMsg('TWR', `Aircraft calling ${f.name}, standby.`), flash('No callsign in that reply. Two-way comms are NOT established yet.', '#ffb347', 3.6);
+  } else if (g === 'CTAF') { game.ctaf = true; radioMsg('YOU', `Bay Bridge traffic, Skyhawk N421AP, ${posn(DEST.x, DEST.y)}, inbound for landing, Bay Bridge.`); }
+  openRadio();
+}
+
+// ====================================================================
+//  Simulation & rules
+// ====================================================================
+function step(dt) {
+  game.t += dt;
+  const turn = (hold.right || keys.ArrowRight ? 1 : 0) - (hold.left || keys.ArrowLeft ? 1 : 0);
+  pl.hdg = norm(pl.hdg + turn * 3 * dt);
+  const dA = pl.tgt - pl.alt, rate = dA > 0 ? 700 / 60 : 800 / 60;
+  pl.vs = Math.abs(dA) < 2 ? 0 : Math.sign(dA) * rate; pl.alt += clamp(dA, -rate * dt, rate * dt);
+  pl.x = clamp(pl.x + Math.sin(pl.hdg * D2R) * NMPS * dt, WORLD.x0 + 1, WORLD.x1 - 1); pl.y = clamp(pl.y - Math.cos(pl.hdg * D2R) * NMPS * dt, WORLD.y0 + 1, WORLD.y1 - 1);
+  game.levelT = (pl.vs === 0 && turn === 0) ? game.levelT + dt : 0;
+  rules();
+}
+function rules() {
+  const now = {};
+  for (const v of VOL) if ((RULED.includes(v.k) || v.k === 'MODEC') && insideVol(v, pl.x, pl.y, pl.alt)) now[v.grp] = now[v.grp] || v;
+  for (const g in now) if (!game.inside[g]) enter(g, now[g]);
+  game.inside = now;
+  if (now.B && game.clrB && pl.alt > game.clrB.maxA + 150 && !game.warned.bAlt) { game.warned.bAlt = true; addScore(-50, `Above your Bravo altitude (${fmt(game.clrB.maxA)})`); }
+  TOWERS.forEach((t, i) => { if (!game.towerHits[i] && Math.hypot(pl.x - t.x, pl.y - t.y) < .35 && pl.alt < t.m + 300) { game.towerHits[i] = true; addScore(-150, `Too close to a ${fmt(t.m)} ft obstacle`); } });
+  if (!game.cityHit && isTown(pl.x, pl.y) && pl.alt - elev(pl.x, pl.y) < 1000 && d2(DEST) > 3 && d2(START) > 3) { game.cityHit = true; addScore(-40, 'Below 1,000 ft over a congested area'); }
+  const agl = pl.alt - elev(pl.x, pl.y);
+  if (game.levelT > 40 && agl > 3000) { const east = norm(pl.hdg + VAR) < 180, key = (east ? 'E' : 'W') + pl.alt;
+    if (!game.hemiSegs[key]) { game.hemiSegs[key] = true; const ok = pl.alt % 1000 === 500 && ((Math.floor(pl.alt / 1000) % 2 === 1) === east);
+      if (ok) addScore(50, `Correct VFR cruising altitude (${fmt(pl.alt)})`); else addScore(-30, `Wrong VFR cruising altitude for a ${east ? 'eastbound' : 'westbound'} course`); } }
+  updateLand(); checkQuizzes();
+}
+function enter(g, v) {
+  if (v.k === 'B') { if (!game.clrB) { game.viol++; addScore(-300, 'Class B bust: no clearance'); radioMsg('ATC', 'N421AP, Potomac Approach, possible pilot deviation. Advise you call this number…'); } else flash('Inside Class B under your clearance', '#9df27f'); }
+  else if (v.k === 'D') { if (!game.contact[g]) { game.viol++; addScore(-150, `Entered ${v.n.replace(' CLASS D', '')} Class D without two-way comms`); } else flash(`In the ${v.n.replace(' CLASS D', '')} Class D, in contact`, '#9df27f'); }
+  else if (v.k === 'SFRA') { game.viol++; addScore(-400, 'Entered the DC SFRA without a flight plan!'); radioMsg('ATC', 'N421AP, Potomac Approach, you are inside the SFRA without authorization. Turn immediately to exit, and expect a phone number.'); }
+  else if (v.k === 'FRZ') { game.viol++; addScore(-800, 'Penetrated the DC Flight Restricted Zone!'); }
+  else if (v.k === 'P') { game.viol++; addScore(-500, `Flew into prohibited area ${v.n}!`); }
+  else if (v.k === 'R') { if (SUA_STATUS[g]) { game.viol++; addScore(-300, `Entered ${v.n} while it was active`); } else flash(`In ${v.n}. It's cold today, so that's legal`, '#9df27f'); }
+  else if (v.k === 'MOA') flash(`Entering ${v.n}. Watch for military traffic`, '#ffcc33');
+}
+let landShown = null;
+function updateLand(force) { const ok = running && !game.over && d2(DEST) < 3 && pl.alt < 2100 && game.ctaf; if (ok !== landShown || force) { landShown = ok; document.getElementById('landBtn').hidden = !ok; } }
+function land() { if (!landShown || game.over) return; radioMsg('YOU', 'Bay Bridge traffic, N421AP, clear of the runway.'); game.over = true; addScore(300, 'Arrived at Bay Bridge'); if (game.viol === 0) addScore(200, 'No airspace violations'); setTimeout(showEnd, 700); }
+
+// ====================================================================
+//  Projection & drawing
+// ====================================================================
+function P(x, y, z = 0) { return [W / 2 + (x - cam.cx) * cam.s, H * cam.yc + (y - cam.cy) * cam.s * cam.T - z * cam.hz]; }
+function unP(sx, sy) { return [cam.cx + (sx - W / 2) / cam.s, cam.cy + (sy - H * cam.yc) / (cam.s * cam.T)]; }
+const BLUE = '#1d5fae', MAG = '#a8327f', OBS = '#1b2c4a';
+function label(text, x, y, color, size = 11, weight = 'bold', align = 'center') {
+  ctx.font = `${weight} ${size}px "Trebuchet MS", sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineJoin = 'round';
+  ctx.strokeText(text, x, y); ctx.fillStyle = color; ctx.fillText(text, x, y);
+}
+function frac(top, bot, x, y, color) { label(top, x, y - 7, color, 12, '900'); ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 11, y); ctx.lineTo(x + 11, y); ctx.stroke(); label(bot, x, y + 8, color, 12, '900'); }
+function ringsPath(rings, z = 0) { ctx.beginPath(); for (const r of rings) { r.forEach(([x, y], i) => { const [a, b] = P(x, y, z); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); }); ctx.closePath(); } }
+function visibleVol(v) { const [a, b] = P(v.bb[0], v.bb[1]), [c, d] = P(v.bb[2], v.bb[3]); return c > -50 && a < W + 50 && d > -50 && b < H + 50; }
+
+function drawBase() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = '#6d8a52'; ctx.fillRect(0, 0, W, H);
+  const s = cam.s, T = cam.T; ctx.setTransform(DPR * s, 0, 0, DPR * s * T, DPR * (W / 2 - cam.cx * s), DPR * (H * cam.yc - cam.cy * s * T)); ctx.imageSmoothingEnabled = true;
+  if (cam.chart && tacImg) ctx.drawImage(tacImg, WORLD.x0, WORLD.y0, WORLD.x1 - WORLD.x0, WORLD.y1 - WORLD.y0);
+  else if (base) { ctx.drawImage(base, WORLD.x0, WORLD.y0, WORLD.x1 - WORLD.x0, WORLD.y1 - WORLD.y0); if (s > 60) drawDetail(); }
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+function drawDetail() {
+  const [ax, ay] = unP(0, 0), [bx, by] = unP(W, H);
+  const i0 = clamp(Math.floor((ax - WORLD.x0) / CS) - 1, 0, NI - 1), i1 = clamp(Math.ceil((bx - WORLD.x0) / CS) + 1, 0, NI - 1), j0 = clamp(Math.floor((ay - WORLD.y0) / CS) - 1, 0, NJ - 1), j1 = clamp(Math.ceil((by - WORLD.y0) / CS) + 1, 0, NJ - 1);
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const c = cellAt(i, j), x0 = WORLD.x0 + i * CS, y0 = WORLD.y0 + j * CS;
+    if (c.t === 'field' && c.rows) { ctx.strokeStyle = 'rgba(0,0,0,.09)'; ctx.lineWidth = .008; ctx.beginPath(); for (let k = .03; k < CS - .02; k += .03) { if (c.rot) { ctx.moveTo(x0 + k, y0 + .02); ctx.lineTo(x0 + k, y0 + CS - .02); } else { ctx.moveTo(x0 + .02, y0 + k); ctx.lineTo(x0 + CS - .02, y0 + k); } } ctx.stroke(); }
+    else if (c.t === 'forest') for (let k = 0; k < 10; k++) { const r = .022 + hash2(i, j, 50 + k) * .02, x = x0 + hash2(i, j, 60 + k) * CS, y = y0 + hash2(i, j, 70 + k) * CS; ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(x + r * .4, y + r * .5, r, 0, 6.283); ctx.fill(); ctx.fillStyle = k % 3 ? '#3f6d35' : '#4f8240'; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill(); }
+    else if (c.t === 'city') for (let k = 0; k < 6; k++) { const w = .045 + hash2(i, j, 80 + k) * .02, h = .035 + hash2(i, j, 90 + k) * .015, x = x0 + .03 + (k % 3) * .1, y = y0 + .045 + Math.floor(k / 3) * .14, vert = hash2(i, j, 100 + k) < .5;
+      ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(x + .008, y + .01, w, h); ctx.fillStyle = ['#8b5b45', '#6d6f73', '#9b9b94', '#a1634a', '#7f8a92', '#b5ab9a'][Math.floor(hash2(i, j, 110 + k) * 6)]; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = 'rgba(255,255,255,.18)'; if (vert) ctx.fillRect(x, y, w / 2, h); else ctx.fillRect(x, y, w, h / 2); } }
+}
+function hatch(v, col, alpha = .8, wdt = 12) { ctx.save(); ringsPath(v.r); ctx.clip('evenodd'); ctx.strokeStyle = col; ctx.globalAlpha = alpha; ctx.lineWidth = wdt; ctx.setLineDash([2, 5]); ringsPath(v.r); ctx.stroke(); ctx.restore(); ctx.setLineDash([]); ctx.strokeStyle = col; ctx.lineWidth = 1.6; ringsPath(v.r); ctx.stroke(); }
+function drawChart2D() {
+  const s = cam.s;
+  // Class E 700 ft vignettes (soft magenta inside the boundary)
+  for (const v of VOL) if (v.k === 'E5' && visibleVol(v)) { ctx.save(); ringsPath(v.r); ctx.clip('evenodd'); ctx.strokeStyle = 'rgba(168,50,127,.32)'; ctx.lineWidth = Math.max(10, s * 1.2); ringsPath(v.r); ctx.stroke(); ctx.restore(); }
+  // planned direct course
+  ctx.strokeStyle = 'rgba(168,50,127,.55)'; ctx.lineWidth = 3; ctx.setLineDash([2, 7]); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(...P(START.x, START.y)); ctx.lineTo(...P(DEST.x, DEST.y)); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = 'butt';
+  for (const v of VOL) {
+    if (!visibleVol(v)) continue;
+    const [lx, ly] = P(...v.lp);
+    if (v.k === 'SFRA') { ctx.save(); ringsPath(v.r); ctx.clip(); ctx.strokeStyle = 'rgba(120,170,220,.55)'; ctx.lineWidth = 26; ringsPath(v.r); ctx.stroke(); ctx.strokeStyle = BLUE; ctx.lineWidth = 12; ctx.setLineDash([2, 4]); ringsPath(v.r); ctx.stroke(); ctx.restore(); ctx.setLineDash([]); ctx.strokeStyle = BLUE; ctx.lineWidth = 2.5; ringsPath(v.r); ctx.stroke();
+      label('WASHINGTON DC SFRA · SFC–FL180 (APPROX.)', lx, ly, BLUE, 12, '900'); continue; }
+    if (v.k === 'FRZ') { ringsPath(v.r); ctx.fillStyle = 'rgba(250,230,120,.22)'; ctx.fill(); ctx.strokeStyle = BLUE; ctx.lineWidth = 2; ctx.setLineDash([10, 4, 2, 4]); ctx.stroke(); ctx.setLineDash([]); label('DC FRZ (APPROX.)', lx, ly, BLUE, 12, '900'); continue; }
+    if (v.k === 'MODEC') { ctx.strokeStyle = 'rgba(168,50,127,.8)'; ctx.lineWidth = 1.4; ringsPath(v.r); ctx.stroke(); continue; }
+    if (v.k === 'E2') { ctx.strokeStyle = MAG; ctx.lineWidth = 2; ctx.setLineDash([8, 5]); ringsPath(v.r); ctx.stroke(); ctx.setLineDash([]); continue; }
+    if (v.k === 'B') { ctx.strokeStyle = BLUE; ctx.lineWidth = 2.6; ringsPath(v.r); ctx.stroke(); if (s > 7) frac(label100(v.ce), label100(v.fl), lx, ly, BLUE); continue; }
+    if (v.k === 'D') { ctx.strokeStyle = BLUE; ctx.lineWidth = 2.2; ctx.setLineDash([9, 6]); ringsPath(v.r); ctx.stroke(); ctx.setLineDash([]);
+      const bx = P(v.bb[2], 0)[0] - (P(v.bb[2], 0)[0] - P(v.bb[0], 0)[0]) * .18, by = P(0, v.bb[1])[1] + (P(0, v.bb[3])[1] - P(0, v.bb[1])[1]) * .18;
+      ctx.save(); ctx.setLineDash([3, 2]); ctx.strokeStyle = BLUE; ctx.lineWidth = 1.4; ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillRect(bx - 13, by - 9, 26, 18); ctx.strokeRect(bx - 13, by - 9, 26, 18); ctx.restore(); label(label100(v.ce), bx, by + 1, BLUE, 12, '900'); continue; }
+    if (v.k === 'R' || v.k === 'P') { hatch(v, BLUE); if (s > 6) { label(v.n, lx, ly - 7, BLUE, 13, '900'); label(v.k === 'R' ? `${v.fl ? fmt(v.fl) : 'SFC'}–${v.ce >= 60000 ? 'UNLTD' : fmt(v.ce)} · ${SUA_STATUS[v.grp] ? 'HOT' : 'COLD'}` : `SFC–${fmt(v.ce)}`, lx, ly + 7, BLUE, 10); } continue; }
+    if (v.k === 'MOA' || v.k === 'W' || v.k === 'A') { hatch(v, MAG, .55); if (s > 6) { label(v.n, lx, ly - 7, MAG, 13, '900'); label(`${fmt(v.fl)}–${fmt(v.ce)}`, lx, ly + 7, MAG, 10); } }
+  }
+  // VOR compass roses (magnetic)
+  for (const vr of VORS) { const [x, y] = P(vr.x, vr.y), r = vr.r * s; if (x < -r || x > W + r || y < -r || y > H + r) continue;
+    ctx.strokeStyle = BLUE; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.stroke();
+    for (let d = 0; d < 360; d += 10) { const a = (d - VAR - 90) * D2R, l = d % 30 === 0 ? 9 : 4; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r); ctx.lineTo(x + Math.cos(a) * (r - l), y + Math.sin(a) * (r - l)); ctx.stroke(); if (d % 30 === 0 && r > 60) label(String(d / 10), x + Math.cos(a) * (r - 17), y + Math.sin(a) * (r - 17), BLUE, 10); }
+    { const a = (-VAR - 90) * D2R; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * (r + 10), y + Math.sin(a) * (r + 10)); ctx.stroke(); }
+    ctx.fillStyle = BLUE; ctx.beginPath(); for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; ctx.lineTo(x + Math.cos(a) * 6, y + Math.sin(a) * 6); } ctx.closePath(); ctx.fill();
+    if (s > 9) label(`${vr.n} ${vr.id}`, x, y + 16, BLUE, 11, '900'); }
+  for (const [n, cx, cy] of CHECKPOINTS) { const [x, y] = P(cx, cy); ctx.fillStyle = MAG; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 16); ctx.lineTo(x + 11, y - 12); ctx.lineTo(x, y - 8); ctx.fill(); ctx.strokeStyle = MAG; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 16); ctx.stroke(); if (s > 11) label(n, x + 4, y + 9, MAG, 10, 'bold', 'left'); }
+}
+function drawTowers(z3) {
+  for (const t of TOWERS) { const [x, y] = P(t.x, t.y); if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue;
+    if (z3) { const top = t.a * cam.hz; ctx.strokeStyle = OBS; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - top); ctx.stroke(); ctx.fillStyle = t.l || (game.t * 2 | 0) % 2 ? '#ff3b2f' : '#7a1d16'; ctx.beginPath(); ctx.arc(x, y - top, 2.6, 0, 6.283); ctx.fill(); }
+    ctx.strokeStyle = OBS; ctx.fillStyle = OBS; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(x - 5, y + 3); ctx.lineTo(x, y - 10); ctx.lineTo(x + 5, y + 3); ctx.stroke(); ctx.beginPath(); ctx.arc(x, y + 2, 1.6, 0, 6.283); ctx.fill();
+    if (t.l) { ctx.beginPath(); for (const a of [-2.4, -1.57, -.74]) { ctx.moveTo(x + Math.cos(a) * 12, y + Math.sin(a) * 12); ctx.lineTo(x + Math.cos(a) * 17, y + Math.sin(a) * 17); } ctx.stroke(); }
+    if (cam.s > 13) { label(String(t.m), x + 8, y - 6, OBS, 11, '900', 'left'); label(`(${t.a})`, x + 8, y + 6, OBS, 10, 'bold', 'left'); } }
+}
+function drawAirports() {
+  for (const a of AIRPORTS) { const [x, y] = P(a.x, a.y); if (x < -150 || x > W + 150 || y < -40 || y > H + 40) continue;
+    const col = a.tw ? BLUE : MAG, big = a.id === 'BWI' || a.id === 'DCA' || a.id === 'IAD';
+    ctx.save(); ctx.translate(x, y); ctx.scale(1, cam.T); const rr = big ? 13 : 9;
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(0, 0, rr, 0, 6.283); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, rr, 0, 6.283); ctx.stroke();
+    for (let k = 0; k < 6; k++) { const an = k * Math.PI / 3; ctx.beginPath(); ctx.moveTo(Math.cos(an) * rr, Math.sin(an) * rr); ctx.lineTo(Math.cos(an) * (rr + 4), Math.sin(an) * (rr + 4)); ctx.stroke(); }
+    ctx.fillStyle = col; ctx.save(); ctx.rotate((hash2(a.x * 10 | 0, a.y * 10 | 0, 3) * 180) * D2R); ctx.fillRect(-1.5, -rr + 3, 3, rr * 2 - 6); ctx.restore(); ctx.restore();
+    if ((cam.s > 10 || big || a === DEST || a === START) && (cam.hz < .001 || d2(a) < 12 || a === DEST)) { const nm = a.n.toUpperCase().replace(/\/.*$/, '');
+      label(`${nm} (${a.id})`, x + rr + 6, y - 6, col, 11, '900', 'left'); label(`${a.tw ? 'CT ★ · ' : ''}${a.e} ft`, x + rr + 6, y + 7, col, 10, 'bold', 'left'); }
+    if (a === DEST) { ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.ellipse(x, y, 24, 24 * cam.T, 0, 0, 6.283); ctx.stroke(); ctx.setLineDash([]); } }
+}
+function drawVolumes3D() {
+  const cap = z => Math.min(z, 12500), order = VOL.filter(v => RULED.includes(v.k) && visibleVol(v)).sort((a, b) => (b.bb[2] - b.bb[0]) * (b.bb[3] - b.bb[1]) - (a.bb[2] - a.bb[0]) * (a.bb[3] - a.bb[1]));
+  for (const v of order) {
+    const fl = cap(v.fl), ce = cap(v.ce), rgb = v.k === 'MOA' ? '168,50,127' : '29,95,174', alpha = v.k === 'SFRA' ? .035 : v.k === 'MOA' ? .05 : v.k === 'B' ? .085 : .12;
+    for (const ring of v.r) { const n = ring.length, step = Math.max(1, Math.floor(n / 90)), edges = [];
+      for (let i = 0; i < n; i += step) edges.push([ring[i], ring[(i + step) % n]]);
+      edges.sort((e1, e2) => (e1[0][1] + e1[1][1]) - (e2[0][1] + e2[1][1]));
+      ctx.fillStyle = `rgba(${rgb},${alpha})`;
+      for (const [a, b] of edges) { const A0 = P(a[0], a[1], fl), B0 = P(b[0], b[1], fl), B1 = P(b[0], b[1], ce), A1 = P(a[0], a[1], ce); ctx.beginPath(); ctx.moveTo(...A0); ctx.lineTo(...B0); ctx.lineTo(...B1); ctx.lineTo(...A1); ctx.closePath(); ctx.fill(); } }
+    ringsPath(v.r, ce); ctx.fillStyle = `rgba(${rgb},${alpha * 1.4})`; ctx.fill('evenodd'); ctx.strokeStyle = `rgba(${rgb},.85)`; ctx.lineWidth = 1.6; ctx.setLineDash(v.k === 'D' ? [8, 5] : []); ctx.stroke(); ctx.setLineDash([]);
+    ringsPath(v.r, fl); ctx.setLineDash([5, 5]); ctx.strokeStyle = `rgba(${rgb},.5)`; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+    if (Math.hypot(v.lp[0] - pl.x, v.lp[1] - pl.y) > 22) continue;
+    const [lx, ly] = P(...v.lp, ce);
+    const txt = v.k === 'B' ? `${label100(v.ce)}/${label100(v.fl)}` : v.k === 'D' ? `[${label100(v.ce)}] ${v.id}` : v.k === 'SFRA' ? 'DC SFRA SFC–FL180' : v.k === 'FRZ' ? 'DC FRZ' : `${v.n} ${v.fl ? fmt(v.fl) : 'SFC'}–${v.ce >= 60000 ? 'UNLTD' : fmt(v.ce)}`;
+    label(txt, lx, ly, v.k === 'MOA' ? MAG : BLUE, 11, '900');
+  }
+}
+function drawPlane() {
+  const [gx, gy] = P(pl.x, pl.y, 0), [ax, ay] = P(pl.x, pl.y, pl.alt);
+  if (cam.hz > .001) { ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(gx, gy, 10, 10 * cam.T, 0, 0, 6.283); ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(ax, ay); ctx.stroke(); ctx.setLineDash([]); }
+  else { ctx.save(); ctx.translate(gx + 6, gy + 8); ctx.rotate(pl.hdg * D2R); ctx.globalAlpha = .3; planeSprite('#000', '#000'); ctx.restore(); }
+  ctx.save(); ctx.translate(ax, ay); ctx.rotate(pl.hdg * D2R); planeSprite('#fbfbf6', '#1d3f7a'); ctx.restore();
+  ctx.strokeStyle = 'rgba(255,204,51,.85)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(...P(pl.x + Math.sin(pl.hdg * D2R) * 4, pl.y - Math.cos(pl.hdg * D2R) * 4, pl.alt)); ctx.stroke(); ctx.setLineDash([]);
+  const tag = `${fmt(pl.alt)}${pl.tgt !== Math.round(pl.alt) ? (pl.tgt > pl.alt ? ' ↗ ' : ' ↘ ') + fmt(pl.tgt) : ''}`;
+  ctx.font = 'bold 12px "Courier New", monospace'; const tw = ctx.measureText(tag).width + 10; ctx.fillStyle = 'rgba(12,17,22,.85)'; ctx.fillRect(ax + 18, ay - 9, tw, 18); ctx.fillStyle = '#ffcc33'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(tag, ax + 23, ay + 1);
+}
+function planeSprite(c, st) {
+  ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(0, -14); ctx.quadraticCurveTo(3, -12, 2.8, -5); ctx.lineTo(1.2, 12); ctx.lineTo(-1.2, 12); ctx.lineTo(-2.8, -5); ctx.quadraticCurveTo(-3, -12, 0, -14); ctx.fill();
+  ctx.fillRect(-6.5, 9.5, 13, 3.2); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-19, -6, 38, 5.4, 2) : ctx.rect(-19, -6, 38, 5.4); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = .8; ctx.stroke();
+  ctx.fillStyle = st; ctx.fillRect(-19, -4.5, 3.2, 2.5); ctx.fillRect(15.8, -4.5, 3.2, 2.5); ctx.fillRect(-.7, 1, 1.4, 9); ctx.fillStyle = '#25384c'; ctx.fillRect(-2.3, -8, 4.6, 1.8);
+}
+// ---------------- HUD ----------------
+function panel(x, y, w, h) { ctx.fillStyle = 'rgba(12,17,22,.86)'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = 'rgba(255,204,51,.7)'; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2); }
+function txt(s, x, y, font, color, align = 'left') { ctx.font = font; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = color; ctx.fillText(s, x, y); }
+function wrapT(s, maxW) { const words = s.split(' '), out = []; let cur = ''; for (const w of words) { const t = cur ? cur + ' ' + w : w; if (ctx.measureText(t).width > maxW && cur) { out.push(cur); cur = w; } else cur = t; } if (cur) out.push(cur); return out; }
+function airspaceNow() {
+  const ins = VOL.filter(v => RULED.includes(v.k) && insideVol(v, pl.x, pl.y, pl.alt)), names = [...new Set(ins.map(v => v.k === 'B' ? 'Class B' : v.k === 'D' ? `Class D (${v.id})` : v.k === 'SFRA' ? 'DC SFRA' : v.k === 'FRZ' ? 'DC FRZ' : v.n))];
+  const e2 = VOL.find(v => v.k === 'E2' && insideVol(v, pl.x, pl.y, pl.alt)), under = VOL.filter(v => v.k === 'B' && horiz(v, pl.x, pl.y) && pl.alt < v.fl).sort((a, b) => a.fl - b.fl)[0];
+  const veil = VOL.some(v => v.k === 'MODEC' && insideVol(v, pl.x, pl.y, pl.alt));
+  const main = names.length ? names.join(' + ') : e2 ? 'Class E (surface)' : 'Class E';
+  const note = under ? `under Bravo shelf ${label100(under.ce)}/${label100(under.fl)} (floor ${fmt(under.fl)})` : veil ? 'inside the 30 NM Mode C veil' : `ground ~${fmt(elev(pl.x, pl.y))} ft (estimated)`;
+  const bad = ins.some(v => (v.k === 'B' && !game.clrB) || v.k === 'P' || v.k === 'SFRA' || v.k === 'FRZ' || (v.k === 'R' && SUA_STATUS[v.grp]) || (v.k === 'D' && !game.contact[v.grp]));
+  return { main, note, bad };
+}
+function drawHUD() {
+  const narrow = W < 640, w = narrow ? W - 24 : 440, x = 12, y = 12, as = airspaceNow();
+  panel(x, y, w, 76);
+  txt('SECTIONAL RUN', x + 12, y + 21, '900 14px Impact, "Arial Black", sans-serif', '#ffcc33');
+  txt(`${Math.round(game.score)} PTS · ${Math.floor(game.t / 60)}:${String(Math.floor(game.t % 60)).padStart(2, '0')}${paused ? ' · PAUSED' : ''}`, x + w - 12, y + 21, 'bold 12px "Courier New", monospace', '#ffcc33', 'right');
+  txt(`AIRSPACE: ${as.main}`, x + 12, y + 43, `bold ${narrow ? 13 : 14}px "Trebuchet MS", sans-serif`, as.bad ? '#ff7a6b' : '#f3efe2');
+  txt(as.note, x + 12, y + 62, '12px "Trebuchet MS", sans-serif', '#9fb3c3');
+  txt(`W29 ${d2(DEST).toFixed(0)} NM · ${hdg3(brg(pl.x, pl.y, DEST.x, DEST.y) + VAR)}°`, x + w - 12, y + 62, 'bold 12px "Courier New", monospace', '#9fd3ff', 'right');
+  const m = game.radioLog[game.radioLog.length - 1];
+  if (m && game.t - m.t < 25) { ctx.font = '12px "Courier New", monospace'; const L = wrapT(`${m.who}: ${m.text}`, w - 20); panel(x, y + 82, w, 12 + L.length * 15); L.forEach((l, i) => txt(l, x + 10, y + 99 + i * 15, '12px "Courier New", monospace', m.who === 'YOU' ? '#9fd3ff' : '#9df27f')); }
+  let fy = Math.max(H * .3, 200);
+  for (const f of flashes) { ctx.globalAlpha = clamp(Math.min(f.life / .5, (f.max - f.life + .2) / .2), 0, 1); ctx.font = `900 ${narrow ? 18 : 22}px Impact, "Arial Black", sans-serif`; ctx.textAlign = 'center'; ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
+    for (const l of wrapT(f.text, W - 40)) { ctx.strokeText(l, W / 2, fy); ctx.fillStyle = f.color; ctx.fillText(l, W / 2, fy); fy += narrow ? 24 : 28; } ctx.globalAlpha = 1; }
+  const [dx, dy] = P(DEST.x, DEST.y);
+  if (dx < 0 || dx > W || dy < 0 || dy > H) { const [ax, ay] = P(pl.x, pl.y, pl.alt), a = Math.atan2(dy - ay, dx - ax); ctx.save(); ctx.translate(ax + Math.cos(a) * 46, ay + Math.sin(a) * 46); ctx.rotate(a); ctx.fillStyle = '#ffd21f'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-6, -10); ctx.lineTo(-2, 0); ctx.lineTo(-6, 10); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore(); }
+  if (cam.chart) { ctx.font = 'bold 11px "Courier New", monospace'; const s = 'FAA BALTIMORE–WASHINGTON TAC'; const tw = ctx.measureText(s).width + 12; ctx.fillStyle = 'rgba(12,17,22,.8)'; ctx.fillRect(W - tw - 12, 12, tw, 20); txt(s, W - 18, 26, 'bold 11px "Courier New", monospace', '#ffcc33', 'right'); }
+}
+function render() {
+  drawBase();
+  if (!cam.chart) { if (cam.hz < .001) { const [a, b] = P(WORLD.x0, WORLD.y0), [c, d] = P(WORLD.x1, WORLD.y1); ctx.save(); ctx.beginPath(); ctx.rect(a, b, c - a, d - b); ctx.clip(); drawChart2D(); drawTowers(false); drawAirports(); ctx.restore(); }
+    else { drawLite(); drawAirports(); drawTowers(true); drawVolumes3D(); } }
+  else if (cam.hz > .001) drawVolumes3D();
+  drawPlane(); drawHUD();
+}
+function drawLite() {
+  ctx.strokeStyle = 'rgba(168,50,127,.55)'; ctx.lineWidth = 3; ctx.setLineDash([2, 7]); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(...P(START.x, START.y)); ctx.lineTo(...P(DEST.x, DEST.y)); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = 'butt';
+  for (const v of VOL) if ((v.k === 'MODEC' || v.k === 'E2') && visibleVol(v)) { ctx.strokeStyle = 'rgba(168,50,127,.6)'; ctx.lineWidth = 1.4; ctx.setLineDash(v.k === 'E2' ? [8, 5] : []); ringsPath(v.r); ctx.stroke(); ctx.setLineDash([]); }
+}
+
+// ====================================================================
+//  Input
+// ====================================================================
+addEventListener('keydown', e => {
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+  if (keys[e.code]) return; keys[e.code] = true; if (!running || game.over) return;
+  if (game.quiz && !game.quiz.done) { const n = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code]; if (n !== undefined) answerQuiz(n); return; }
+  if (!document.getElementById('sheet').hidden) { if (e.code === 'Escape' || e.code === 'Enter') closeSheet(); return; }
+  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyL: land, Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; hold.left = hold.right = false; });
+function setTgt(d) { pl.tgt = clamp(pl.tgt + d, 1000, 12500); }
+function zoom(f) { cam.s = clamp(cam.s * f, 5, 160); }
+function toggleView() { cam.view = cam.view === '2d' ? '3d' : '2d'; document.getElementById('bView').textContent = cam.view === '2d' ? '3D' : '2D'; }
+function toggleChart() { cam.chart = !cam.chart; document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'TAC'; }
+function cycleSpeed() { const r = [1, 4, 8, 16]; simRate = r[(r.indexOf(simRate) + 1) % r.length]; document.getElementById('bSpeed').textContent = simRate + '×'; }
+function togglePause() { paused = !paused; document.getElementById('bPause').textContent = paused ? '▶' : 'II'; }
+const holdBtn = (id, k) => { const b = document.getElementById(id); const on = e => { e.preventDefault(); hold[k] = true; b.classList.add('on'); }, off = () => { hold[k] = false; b.classList.remove('on'); }; b.addEventListener('pointerdown', on); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, off); };
+holdBtn('bLeft', 'left'); holdBtn('bRight', 'right');
+const tap = (id, f) => document.getElementById(id).addEventListener('click', f);
+tap('bUp', () => setTgt(500)); tap('bDown', () => setTgt(-500)); tap('bRadio', () => running && !game.over && openRadio()); tap('bView', toggleView); tap('bChart', toggleChart);
+tap('bSpeed', cycleSpeed); tap('bZin', () => zoom(1.4)); tap('bZout', () => zoom(1 / 1.4)); tap('bPause', togglePause); tap('landBtn', land);
+document.getElementById('sheetCard').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.opt !== undefined) answerQuiz(+t.dataset.opt); else if (t.dataset.call) call(t.dataset.call); else if (t.hasAttribute('data-close')) closeSheet(); });
+function showSheet(on) { document.getElementById('sheet').hidden = !on; }
+function closeSheet() { showSheet(false); if (game.quiz && game.quiz.done) game.quiz = null; }
+const ptrs = new Map(); let gest = null;
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: performance.now() }); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; gest = { d: Math.hypot(a.x - b.x, a.y - b.y), s: cam.s }; } });
+cv.addEventListener('pointermove', e => { const p = ptrs.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+  if (ptrs.size === 2 && gest) { const [a, b] = [...ptrs.values()]; cam.s = clamp(gest.s * Math.hypot(a.x - b.x, a.y - b.y) / gest.d, 5, 160); }
+  else if (ptrs.size === 1 && Math.hypot(p.x - p.x0, p.y - p.y0) > 6) { cam.px -= dx / cam.s; cam.py -= dy / (cam.s * cam.T); cam.lastPan = performance.now(); } });
+cv.addEventListener('pointerup', e => { const p = ptrs.get(e.pointerId); ptrs.delete(e.pointerId); if (ptrs.size < 2) gest = null; if (p && ptrs.size === 0 && Math.hypot(p.x - p.x0, p.y - p.y0) < 6 && performance.now() - p.t0 < 400) info(p.x, p.y); });
+cv.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); gest = null; });
+cv.addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY > 0 ? 1 / 1.15 : 1.15); }, { passive: false });
+function info(sx, sy) {
+  if (!running) return; const [x, y] = unP(sx, sy), items = [];
+  for (const a of AIRPORTS) if (Math.hypot(x - a.x, y - a.y) < Math.max(1, 20 / cam.s)) items.push(`<b>${a.n} (${a.id})</b> · ${a.tw ? 'towered (blue symbol)' : 'no tower (magenta symbol): self-announce on CTAF'} · field elevation ${a.e} ft`);
+  for (const t of TOWERS) if (Math.hypot(x - t.x, y - t.y) < Math.max(.6, 16 / cam.s)) items.push(`<b>Obstacle (${t.t || 'tower'})</b> · top ${fmt(t.m)} ft MSL, ${fmt(t.a)} ft AGL${t.l ? ', lighted' : ''}`);
+  for (const v of VORS) if (Math.hypot(x - v.x, y - v.y) < 1.2) items.push(`<b>${v.n} ${v.c} (${v.id})</b> · compass rose oriented to magnetic north`);
+  const seen = new Set();
+  for (const v of VOL) if (horiz(v, x, y)) { const key = v.k + v.fl + v.ce + v.n; if (seen.has(key)) continue; seen.add(key);
+    const fl = v.fl === 0 ? 'surface' : fmt(v.fl), ce = v.ce >= 60000 ? 'unlimited' : v.ce >= 18000 ? 'FL180' : fmt(v.ce);
+    const why = { B: 'needs an explicit clearance', D: 'needs two-way radio communication', E2: 'Class E from the surface', E5: 'Class E from 700 ft AGL here', MODEC: 'Mode C transponder and ADS-B Out required (30 NM veil)', SFRA: 'SFRA flight plan, discrete code and training required (approximate boundary)', FRZ: 'closed to nearly all VFR flight (approximate boundary)',
+      R: `${SUA_STATUS[v.grp] ? 'ACTIVE today, so stay out' : 'not active today'}${v.tou ? ' · ' + v.tou.toLowerCase() : ''}`, P: 'no flight allowed', MOA: 'military training, so use caution', W: 'warning area', A: 'alert area' }[v.k] || '';
+    if (v.k === 'E5' && items.some(i => i.includes('700 ft'))) continue;
+    items.push(`<b>${v.k === 'E5' ? 'Class E' : v.n}</b> · ${v.k === 'E5' || v.k === 'MODEC' ? '' : fl + ' to ' + ce + ' ft MSL · '}${why}`); }
+  if (!items.length) items.push('<b>Class E</b> from 1,200 ft AGL (Class G below)');
+  items.push(`<span style="color:#6b5a2a">${isWater(x, y) ? 'Water' : isTown(x, y) ? 'Congested area (yellow)' : 'Open country'} · ground about ${fmt(elev(x, y))} ft (estimated)</span>`);
+  const el = document.getElementById('toast'); el.innerHTML = `<span class="x">✕</span>` + items.map(i => `<div>${i}</div>`).join(''); el.hidden = false; clearTimeout(info.t); info.t = setTimeout(() => el.hidden = true, 8000);
+}
+document.getElementById('toast').addEventListener('click', () => { document.getElementById('toast').hidden = true; });
+
+// ====================================================================
+//  Loop & screens
+// ====================================================================
+let last = performance.now();
+const rHdg = document.getElementById('rHdg'), rAlt = document.getElementById('rAlt'), rTgt = document.getElementById('rTgt'), rCrs = document.getElementById('rCrs');
+function frame(now) {
+  const rdt = Math.min(.05, (now - last) / 1000); last = now;
+  if (running && game) {
+    const frozen = paused || game.over || !document.getElementById('sheet').hidden;
+    if (!frozen) { let t = rdt * simRate; while (t > 0) { const d = Math.min(t, .25); step(d); t -= d; } }
+    for (const f of flashes) f.life -= rdt; while (flashes.length && flashes[0].life <= 0) flashes.shift();
+    const tT = cam.view === '3d' ? .5 : 1, tH = cam.view === '3d' ? cam.s * .0011 + .008 : 0, tY = cam.view === '3d' ? .7 : .5, k = Math.min(1, rdt * 4);
+    cam.T += (tT - cam.T) * k; cam.hz += (tH - cam.hz) * k; cam.yc += (tY - cam.yc) * k; if (cam.view === '2d' && cam.hz < .00005) cam.hz = 0;
+    if (now - cam.lastPan > 5000) { cam.px *= 1 - Math.min(1, rdt * 2); cam.py *= 1 - Math.min(1, rdt * 2); }
+    cam.cx = pl.x + cam.px; cam.cy = pl.y + cam.py;
+    rHdg.textContent = hdg3(pl.hdg + VAR) + '°'; rAlt.textContent = fmt(pl.alt); rTgt.textContent = pl.tgt !== Math.round(pl.alt) ? '→ ' + fmt(pl.tgt) : 'LEVEL'; rCrs.textContent = 'W29 ' + hdg3(brg(pl.x, pl.y, DEST.x, DEST.y) + VAR) + '°';
+  }
+  if (game && base) render();
+  requestAnimationFrame(frame);
+}
+function showEnd() {
+  const sc = Math.round(game.score), grade = sc >= 1400 ? 'A' : sc >= 1000 ? 'B' : sc >= 650 ? 'C' : sc >= 300 ? 'D' : 'F';
+  const rows = game.log.map(l => `<tr><td>${l.label}</td><td class="pts ${l.pts >= 0 ? 'pos' : 'neg'}">${l.pts > 0 ? '+' : ''}${l.pts}</td></tr>`).join('');
+  document.getElementById('endCard').innerHTML = `<div class="grade">${grade}</div><h1>Arrived at Bay Bridge</h1>
+    <h2>${game.correct} of ${game.quizzes} checkride questions · ${game.viol} airspace violation${game.viol === 1 ? '' : 's'} · ${Math.floor(game.t / 60)} min flight</h2>
+    <table>${rows}<tr><td><b>Total</b></td><td class="pts"><b>${sc}</b></td></tr></table>
+    <p class="fine">Each flight rolls new conditions. Restricted areas scheduled "by NOTAM" may be hot or cold, and Potomac Approach won't always clear you into the Bravo.</p>
+    <button class="go" type="button" id="againBtn">Fly it again</button>`;
+  document.getElementById('end').hidden = false;
+  document.getElementById('againBtn').onclick = () => { document.getElementById('end').hidden = true; newGame(); running = true; };
+}
+document.getElementById('startBtn').addEventListener('click', () => { document.getElementById('title').hidden = true; running = true; last = performance.now(); });
+// load the traced mask (and the real chart layer), then build the map
+const mimg = new Image();
+mimg.onload = () => {
+  const c = document.createElement('canvas'); c.width = MW = mimg.width; c.height = MH = mimg.height; const g = c.getContext('2d'); g.drawImage(mimg, 0, 0);
+  const d = g.getImageData(0, 0, MW, MH).data; MASK = new Uint8Array(MW * MH); for (let k = 0; k < MW * MH; k++) { const v = d[k * 4]; MASK[k] = v > 150 ? 2 : v > 50 ? 1 : 0; }
+  for (let j = 0; j < ENY; j++) for (let i = 0; i < ENX; i++) if (isWater(WORLD.x0 + i * EG, WORLD.y0 + j * EG)) EGRID[j * ENX + i] = Math.min(EGRID[j * ENX + i], 60);
+  buildBase(); newGame();
+  const b = document.getElementById('startBtn'); b.disabled = false; b.textContent = 'Start flight';
+};
+mimg.src = 'data:image/png;base64,' + WD.mask;
+if (TAC_SRC.length > 20) { tacImg = new Image(); tacImg.src = TAC_SRC; } else document.getElementById('bChart').hidden = true;
+requestAnimationFrame(frame);
+</script>
