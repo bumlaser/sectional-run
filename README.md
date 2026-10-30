@@ -17,6 +17,23 @@ Base map © OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors.
 
 **`fictional.html`: the first prototype**, on an invented chart.
 
+## Navigator panel (src/nav_panel.js)
+
+A generic touchscreen navigator that mounts as a floating, draggable overlay. It's a self-contained class with
+scoped CSS (`np-` prefix), no dependencies and no flight logic of its own:
+
+```js
+const nav = new NavPanel({ mount: document.body, open: true,
+  onDirectTo: id => { /* make id the active waypoint */ },
+  onAction: name => { /* 'quiz' | 'speed' | 'view' | 'fpl' from the Utilities page */ } });
+// in your frame loop, about 4 times a second:
+nav.update({ gs, trk, dis, dtk, wpt, direct, fpl, nearest, map, com, navaid, utils });
+```
+
+The left strip shows GS, TRK, DIS and DTK. The right screen opens on a 2×3 home grid (Map, FPL, Proc, Nav/Com,
+Nearest, Utilities). The bezel's HOME and D→ buttons return to the grid and open Direct-To. In the game,
+`navData()` in `src/game.html` is the adapter that builds the update from the game state.
+
 ## Building
 
 `index.html` and `3d/index.html` are generated, so edit `src/game.html` (game logic, shared) and `src/map_layer.js`

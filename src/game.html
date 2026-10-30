@@ -24,7 +24,7 @@
   .readout small { font-size:10px; color:var(--muted); letter-spacing:1px; }
   .readout b { font-size:19px; font-variant-numeric:tabular-nums; }
   .readout .tgt { font-size:11px; color:var(--amber); white-space:nowrap; }
-  #ctl .row2 { display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); gap:5px; max-width:660px; width:100%; margin:0 auto; }
+  #ctl .row2 { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); gap:5px; max-width:660px; width:100%; margin:0 auto; }
   #ctl .row2 button { min-height:40px; font-size:12px; }
   #landBtn { max-width:660px; width:100%; margin:0 auto; font:900 18px var(--display); letter-spacing:1px; background:var(--good); color:#111; min-height:46px; }
   .sheet { position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; justify-content:center; padding:0 12px calc(12px + env(safe-area-inset-bottom, 0px)); }
@@ -84,6 +84,7 @@
     <button type="button" id="bSpeed">8×</button>
     <button type="button" id="bZout" aria-label="Zoom out">−</button>
     <button type="button" id="bZin" aria-label="Zoom in">+</button>
+    <button type="button" id="bNav" aria-label="Navigator">NAV</button>
     <button type="button" id="bPause" aria-label="Pause">II</button>
   </div>
 </div>
@@ -101,7 +102,8 @@
       <li><b>RADIO</b> call Potomac Approach, a tower, or self-announce on the CTAF</li>
       <li><b>3D</b> shows the airspace as stacked slabs · <b>TAC</b> swaps in the real FAA chart</li>
       <li>Tap anything on the map to find out what it is · pinch or <b>− +</b> to zoom · drag to look around</li>
-      <li>Keyboard: ← → turn, ↑ ↓ altitude, R radio, V 3D, C chart, X speed, Q questions on/off, P pause, L land</li>
+      <li><b>NAV</b> opens the touchscreen navigator: GS, TRK, DIS and DTK, a moving map, the flight plan, nearest airports and Direct-To</li>
+      <li>Keyboard: ← → turn, ↑ ↓ altitude, R radio, V 3D, C chart, X speed, N navigator, Q questions on/off, P pause, L land</li>
     </ul>
     <label class="opt"><input type="checkbox" id="optQuiz" checked> Ask checkride questions along the way</label>
     <button class="go" id="startBtn" type="button" disabled>Loading chart…</button>
@@ -231,6 +233,7 @@ function newGame() {
   game = { t: 0, score: 0, log: [], over: false, inside: {}, contact: { 'D:FDK': true }, clrB: null, asked: {}, quiz: null, correct: 0, quizzes: 0, levelT: 0,
     hemiSegs: {}, towerHits: {}, cityHit: false, ctaf: false, viol: 0, radioLog: [], warned: {}, seenUnder: null };
   game.radioLog.push({ who: 'TWR', text: 'N421AP, Frederick Tower, departure approved, frequency change approved when clear of the Delta.', t: 0 });
+  game.nav = { plan: [START.id, DEST.id], wpt: DEST.id, origin: [START.x, START.y], direct: false }; game.lastFac = 'Frederick Tower';
   cam.cx = pl.x; cam.cy = pl.y; cam.px = cam.py = 0; cam.s = clamp(Math.min(W, H) / 18, 14, 40);
   document.getElementById('briefNotam').innerHTML = briefing(); updateLand(true);
 }
@@ -343,7 +346,7 @@ function openRadio() {
 function call(g) {
   if (g === 'QUIZ') { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); return openRadio(); }
   if (g === 'FSS') { radioMsg('YOU', 'Leesburg Radio, N421AP, request status of the restricted areas along the bay.'); radioMsg('FSS', `N421AP, ${rStatusLine().replace(/<\/?b>/g, '')}. And remember, no SFRA flight plan on file for you.`); return openRadio(); }
-  const f = facilities().find(f => f.g === g); if (!f) return;
+  const f = facilities().find(f => f.g === g); if (!f) return; game.lastFac = f.name;
   if (g === 'B') {
     radioMsg('YOU', `Potomac Approach, N421AP, ${posn(AP.BWI.x, AP.BWI.y)} of BWI, request Class Bravo transition eastbound to Bay Bridge.`);
     if (Math.random() < .65) { const maxA = clamp(Math.ceil(pl.alt / 500) * 500, 2500, 4500); game.clrB = { maxA }; game.contact.B = true; radioMsg('ATC', `N421AP, squawk 4211, radar contact. Cleared into the Class Bravo airspace, maintain VFR at or below ${fmt(maxA)}.`); }
@@ -564,7 +567,7 @@ addEventListener('keydown', e => {
   if (keys[e.code]) return; keys[e.code] = true; if (!running || game.over) return;
   if (game.quiz && !game.quiz.done) { const n = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code]; if (n !== undefined) answerQuiz(n); return; }
   if (!document.getElementById('sheet').hidden) { if (e.code === 'Escape' || e.code === 'Enter') closeSheet(); return; }
-  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); }, KeyL: land, Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
+  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyN: () => nav && nav.toggle(), KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); }, KeyL: land, Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; hold.left = hold.right = false; });
@@ -578,7 +581,7 @@ const holdBtn = (id, k) => { const b = document.getElementById(id); const on = e
 holdBtn('bLeft', 'left'); holdBtn('bRight', 'right');
 const tap = (id, f) => document.getElementById(id).addEventListener('click', f);
 tap('bUp', () => setTgt(500)); tap('bDown', () => setTgt(-500)); tap('bRadio', () => running && !game.over && openRadio()); tap('bView', () => toggleView()); tap('bChart', () => toggleChart());
-tap('bSpeed', cycleSpeed); tap('bZin', () => zoom(1.4)); tap('bZout', () => zoom(1 / 1.4)); tap('bPause', togglePause); tap('landBtn', land);
+tap('bSpeed', cycleSpeed); tap('bZin', () => zoom(1.4)); tap('bZout', () => zoom(1 / 1.4)); tap('bPause', togglePause); tap('bNav', () => { if (nav) document.getElementById('bNav').classList.toggle('on', nav.toggle()); }); tap('landBtn', land);
 document.getElementById('sheetCard').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.opt !== undefined) answerQuiz(+t.dataset.opt); else if (t.dataset.call) call(t.dataset.call); else if (t.hasAttribute('data-close')) closeSheet(); });
 function showSheet(on) { document.getElementById('sheet').hidden = !on; }
 function closeSheet() { showSheet(false); if (game.quiz && game.quiz.done) game.quiz = null; }
@@ -609,6 +612,37 @@ function info(sx, sy) {
 document.getElementById('toast').addEventListener('click', () => { document.getElementById('toast').hidden = true; });
 
 // ====================================================================
+//  Navigator panel adapter: feeds NavPanel from the game state
+// ====================================================================
+let nav = null, navT = 0;
+const ANY = id => AP[id];
+function navData() {
+  const N = game.nav, wp = ANY(N.wpt) || DEST, o = N.origin;
+  const near = AIRPORTS.map(a => ({ id: a.id, name: a.n, dis: d2(a), brg: norm(brg(pl.x, pl.y, a.x, a.y) + VAR), tw: !!a.tw })).sort((a, b) => a.dis - b.dis).slice(0, 8);
+  const fpl = N.plan.map((id, i) => { const a = ANY(id), p = i ? ANY(N.plan[i - 1]) : null;
+    return { id, name: a.n, dtk: p ? norm(brg(p.x, p.y, a.x, a.y) + VAR) : null, dis: p ? Math.hypot(a.x - p.x, a.y - p.y) : null, active: id === N.wpt }; });
+  const vor = VORS.map(v => ({ id: v.id, name: v.n, dis: d2(v), brg: norm(brg(pl.x, pl.y, v.x, v.y) + VAR) })).sort((a, b) => a.dis - b.dis)[0];
+  const stby = facilities().find(f => f.name !== game.lastFac);
+  return {
+    gs: TAS, trk: norm(pl.hdg + VAR), dis: d2(wp), dtk: norm(brg(o[0], o[1], wp.x, wp.y) + VAR), wpt: wp.id, direct: N.direct, fpl, nearest: near,
+    map: { range: 20, hdg: pl.hdg, items: AIRPORTS.filter(a => d2(a) < 30).map(a => ({ id: a.id, dx: a.x - pl.x, dy: a.y - pl.y, tw: !!a.tw })), leg: [[o[0] - pl.x, o[1] - pl.y], [wp.x - pl.x, wp.y - pl.y]] },
+    com: { active: game.lastFac, standby: stby ? stby.name : '' }, navaid: vor,
+    utils: [{ id: 'quiz', label: 'Checkride questions', value: quizOn ? 'ON' : 'OFF' }, { id: 'speed', label: 'Sim speed', value: simRate + '×' }, { id: 'view', label: 'Camera / view', value: 'CYCLE' }, { id: 'fpl', label: 'Restore flight plan', value: `${START.id}→${DEST.id}` }],
+  };
+}
+function initNav() {
+  if (typeof NavPanel === 'undefined') { document.getElementById('bNav').hidden = true; return; }
+  let pos = null; try { pos = JSON.parse(localStorage.getItem('sr.navpos') || 'null'); } catch (_) {}
+  nav = new NavPanel({ mount: document.body, open: W >= 900, position: pos || undefined,
+    onMove: p => { try { localStorage.setItem('sr.navpos', JSON.stringify(p)); } catch (_) {} },
+    onDirectTo: id => { const a = ANY(id); if (!a || !game) return; game.nav = { ...game.nav, wpt: id, origin: [pl.x, pl.y], direct: true }; flash(`Direct to ${id}: ${hdg3(brg(pl.x, pl.y, a.x, a.y) + VAR)}°, ${d2(a).toFixed(1)} NM`, '#ff9ae8', 2.6); },
+    onAction: k => { if (k === 'quiz') setQuiz(!quizOn); else if (k === 'speed') cycleSpeed(); else if (k === 'view') toggleView();
+      else if (k === 'fpl') game.nav = { plan: [START.id, DEST.id], wpt: DEST.id, origin: [START.x, START.y], direct: false }; navT = 0; } });
+  document.getElementById('bNav').classList.toggle('on', nav.visible);
+}
+function navTick(now) { if (!nav || !game || !game.nav || !nav.visible || now - navT < 250) return; navT = now; nav.update(navData()); }
+
+// ====================================================================
 //  Loop & screens
 // ====================================================================
 let last = performance.now();
@@ -626,6 +660,7 @@ function frame(now) {
     rHdg.textContent = hdg3(pl.hdg + VAR) + '°'; rAlt.textContent = fmt(pl.alt); rTgt.textContent = pl.tgt !== Math.round(pl.alt) ? '→ ' + fmt(pl.tgt) : 'LEVEL'; rCrs.textContent = 'W29 ' + hdg3(brg(pl.x, pl.y, DEST.x, DEST.y) + VAR) + '°';
   }
   if (game && base) render();
+  navTick(now);
   requestAnimationFrame(frame);
 }
 function showEnd() {
@@ -640,7 +675,7 @@ function showEnd() {
   document.getElementById('againBtn').onclick = () => { document.getElementById('end').hidden = true; newGame(); running = true; };
 }
 setQuiz(quizOn); document.getElementById('optQuiz').addEventListener('change', e => setQuiz(e.target.checked));
-document.getElementById('startBtn').addEventListener('click', () => { document.getElementById('title').hidden = true; running = true; last = performance.now(); });
+document.getElementById('startBtn').addEventListener('click', () => { document.getElementById('title').hidden = true; running = true; last = performance.now(); if (!nav) initNav(); });
 // load the traced mask (and the real chart layer), then build the map
 const mimg = new Image();
 mimg.onload = () => {

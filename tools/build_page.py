@@ -6,6 +6,9 @@ ML = '4.7.1'
 src = open('src/game.html').read(); w = open('data/derived/world.json').read()
 tac = 'data:image/jpeg;base64,' + base64.b64encode(open('data/derived/tac_warp.jpg', 'rb').read()).decode()
 fill = lambda s: s.replace('__WORLD__', w, 1).replace("'__TAC__'", "'" + tac + "'", 1)
+NAVJS = '<script>\n' + open('src/nav_panel.js').read() + '</script>\n'
+src = src.replace('<script>\n\'use strict\';\nconst WD', NAVJS + '<script>\n\'use strict\';\nconst WD', 1)
+assert NAVJS in src, 'nav panel not inserted'
 head = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'
 open('index.html', 'w').write(head + fill(src) + '</html>\n')
 
