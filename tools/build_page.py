@@ -41,4 +41,14 @@ function mapReadyHook() { enableStart(); }
 i = m.rindex('</script>\n') + len('</script>\n')   # after the game's own script
 m = m[:i] + '<script>\n' + layer + '</script>\n' + m[i:]
 os.makedirs('3d', exist_ok=True); open('3d/index.html', 'w').write(head + fill(m) + '</html>\n')
-print('index.html', os.path.getsize('index.html') // 1024, 'KB · 3d/index.html', os.path.getsize('3d/index.html') // 1024, 'KB')
+# 3d/index2.html: experimental variant with the six steam gauges in one row along the top of the flight controls
+m2 = patch(m, '<title>Sectional Run 3D</title>', '<title>Sectional Run 3D · gauges</title>')
+m2 = patch(m2, '<div id="ctl">\n', '<div id="ctl">\n  <div id="gstrip" aria-label="Flight instruments"></div>\n')
+i = m2.rindex('</script>\n') + len('</script>\n')
+m2 = m2[:i] + '<script>\n' + open('src/gauge_strip.js').read() + """
+const gstrip = new GaugeStrip(document.getElementById('gstrip'));
+sixTick = (orig => function () { orig(); if (!pl || !game) return;
+  gstrip.update({ ias: TAS, pitch: pl.patt, roll: pl.bank, alt: pl.alt, baro: 29.92, turn: pl.rate, slip: 0, hdg: norm(pl.hdg + VAR), bug: norm(pl.bug + VAR), vs: pl.vs * 60 }); })(sixTick);
+</script>\n""" + m2[i:]
+open('3d/index2.html', 'w').write(head + fill(m2) + '</html>\n')
+print('index.html', os.path.getsize('index.html') // 1024, 'KB · 3d/index.html', os.path.getsize('3d/index.html') // 1024, 'KB · 3d/index2.html', os.path.getsize('3d/index2.html') // 1024, 'KB')

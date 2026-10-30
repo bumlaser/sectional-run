@@ -74,6 +74,13 @@ adsb.lol sends no CORS headers, so a page on github.io can't read it directly. D
 a free Cloudflare Worker (instructions are in the file). Then open the game once with
 `?tfc=https://<worker>.workers.dev`, and it remembers the relay.
 
+## Experimental: gauge row (3d/index2.html)
+
+`3d/index2.html` is the 3D build with the six steam gauges in a single row along the top of the flight controls
+(`src/gauge_strip.js`, using the same QFlightInstruments artwork and needle geometry as the six-pack). The gauges
+size to the screen width: about 56 px each on a phone, and up to 96 px on a desktop. `tools/build_page.py` builds
+it next to `3d/index.html` and leaves that page unchanged.
+
 ## Six-pack instruments (src/six_pack.js)
 
 This is a floating, draggable six-pack: airspeed, attitude, altimeter, turn coordinator, heading indicator and VSI.
