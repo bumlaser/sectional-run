@@ -1292,8 +1292,10 @@ function addLayers() {
     map.addLayer({ id: 'mefq', type: 'line', source: 'mefq', paint: { 'line-color': '#1d5fae', 'line-opacity': .2, 'line-width': 1 } }, firstSymbol);
     map.addLayer({ id: 'mefl', type: 'symbol', source: 'mefl', layout: { 'text-field': ['concat', ['slice', ['get', 't'], 0, ['-', ['length', ['get', 't']], 1]], ' ', ['slice', ['get', 't'], ['-', ['length', ['get', 't']], 1]]], 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 7, 18, 11, 40], 'text-allow-overlap': true, 'text-pitch-alignment': 'map' },
       paint: { 'text-color': 'rgba(29,95,174,.42)' } }, firstSymbol); }
-  map.addSource('tac', { type: 'image', url: TAC_SRC, coordinates: [[w0, n0], [e0, n0], [e0, s0], [w0, s0]] });
-  map.addLayer({ id: 'tac', type: 'raster', source: 'tac', layout: { visibility: 'none' }, paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 } }, firstSymbol);
+  // real chart: XYZ tiles cut from the FAA GeoTIFFs (tools/build_tiles.py), TAC inside its neatline, sectional around it
+  map.addSource('tac', { type: 'raster', tiles: [location.href.replace(/[?#].*$/, '').replace(/[^/]*$/, '') + 'tiles/chart/{z}/{x}/{y}.webp'], tileSize: 256,
+    minzoom: 7, maxzoom: 13, bounds: [-78.2, 38.3, -75.7, 40.07], attribution: 'Charts: FAA Aeronautical Information Services' });
+  map.addLayer({ id: 'tac', type: 'raster', source: 'tac', layout: { visibility: 'none' }, paint: { 'raster-opacity': 1, 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, firstSymbol);
 
   const ruled = VOL.filter(v => RULED.includes(v.k));
   map.addSource('vol', { type: 'geojson', data: fc(VOL.map(volFeat)) });
