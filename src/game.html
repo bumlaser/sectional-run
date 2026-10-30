@@ -24,7 +24,7 @@
   .readout small { font-size:10px; color:var(--muted); letter-spacing:1px; }
   .readout b { font-size:19px; font-variant-numeric:tabular-nums; }
   .readout .tgt { font-size:11px; color:var(--amber); white-space:nowrap; }
-  #ctl .row2 { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); gap:5px; max-width:660px; width:100%; margin:0 auto; }
+  #ctl .row2 { display:grid; grid-template-columns:repeat(9, minmax(0,1fr)); gap:5px; max-width:660px; width:100%; margin:0 auto; }
   #ctl .row2 button { min-height:40px; font-size:12px; }
   #landBtn { max-width:660px; width:100%; margin:0 auto; font:900 18px var(--display); letter-spacing:1px; background:var(--good); color:#111; min-height:46px; }
   .sheet { position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; justify-content:center; padding:0 12px calc(12px + env(safe-area-inset-bottom, 0px)); }
@@ -67,9 +67,9 @@
   <button id="landBtn" type="button" hidden>LAND AT BAY BRIDGE</button>
   <div class="row1">
     <div class="grp" aria-label="Heading">
-      <button type="button" id="bLeft" aria-label="Turn left">◀</button>
-      <div class="readout"><small>HDG</small><b id="rHdg">095°</b><span class="tgt" id="rCrs">W29 102°</span></div>
-      <button type="button" id="bRight" aria-label="Turn right">▶</button>
+      <button type="button" id="bLeft" aria-label="Heading bug left">◀</button>
+      <div class="readout"><small>HDG</small><b id="rHdg">095°</b><span class="tgt" id="rCrs">BUG 123°</span></div>
+      <button type="button" id="bRight" aria-label="Heading bug right">▶</button>
     </div>
     <div class="grp" aria-label="Altitude">
       <button type="button" id="bDown" aria-label="Descend 500 feet">▼</button>
@@ -85,6 +85,7 @@
     <button type="button" id="bZout" aria-label="Zoom out">−</button>
     <button type="button" id="bZin" aria-label="Zoom in">+</button>
     <button type="button" id="bNav" aria-label="Navigator">NAV</button>
+    <button type="button" id="bInst" aria-label="Flight instruments">INST</button>
     <button type="button" id="bPause" aria-label="Pause">II</button>
   </div>
 </div>
@@ -98,12 +99,13 @@
     <p>You've just departed <b>Frederick Muni</b> in <b>N421AP</b>, headed for <b>Bay Bridge</b> on Kent Island. The plane holds 110 knots on its own, so you only steer and pick altitudes. Nothing stalls and nothing crashes. The challenge is reading the chart. The direct line runs straight through the Washington DC SFRA, so you'll need to plan around it, slip under the Baltimore Bravo shelves, and answer checkride questions along the way.</p>
     <div class="notam" id="briefNotam"></div>
     <ul>
-      <li><b>◀ ▶</b> turn (hold) · <b>▲ ▼</b> change target altitude by 500 ft</li>
+      <li><b>◀ ▶</b> (hold) set the heading bug, and the plane turns to it at standard rate · <b>▲ ▼</b> change target altitude by 500 ft</li>
+      <li><b>INST</b> shows a draggable six-pack. Turn its <b>HDG knob</b> to set the bug, or tap the knob to sync it to your heading</li>
       <li><b>RADIO</b> call Potomac Approach, a tower, or self-announce on the CTAF</li>
       <li><b>3D</b> shows the airspace as stacked slabs · <b>TAC</b> swaps in the real FAA chart</li>
       <li>Tap anything on the map to find out what it is · pinch or <b>− +</b> to zoom · drag to look around</li>
       <li><b>NAV</b> opens the touchscreen navigator: GS, TRK, DIS and DTK, a moving map, the flight plan, nearest airports and Direct-To</li>
-      <li>Keyboard: ← → turn, ↑ ↓ altitude, R radio, V 3D, C chart, X speed, N navigator, Q questions on/off, P pause, L land</li>
+      <li>Keyboard: ← → heading bug, ↑ ↓ altitude, R radio, V 3D, C chart, X speed, N navigator, Q questions on/off, P pause, L land</li>
     </ul>
     <label class="opt"><input type="checkbox" id="optQuiz" checked> Ask checkride questions along the way</label>
     <button class="go" id="startBtn" type="button" disabled>Loading chart…</button>
@@ -242,7 +244,7 @@ const hold = { left: false, right: false }, keys = {};
 const SUA_STATUS = {};
 function newGame() {
   const [sx, sy] = [START.x + .9, START.y + .5];
-  pl = { x: sx, y: sy, hdg: 112, alt: 1800, tgt: 2500, vs: 0 };
+  pl = { x: sx, y: sy, hdg: 112, bug: 112, alt: 1800, tgt: 2500, vs: 0, rate: 0, bank: 0, patt: 2 };
   for (const v of VOL) if (v.k === 'R') SUA_STATUS[v.grp] = /CONT|0000-2400/i.test(v.tou) ? true : (SUA_STATUS[v.grp] ?? Math.random() < .6);
   game = { t: 0, score: 0, log: [], over: false, inside: {}, contact: { 'D:FDK': true }, clrB: null, asked: {}, quiz: null, correct: 0, quizzes: 0, levelT: 0,
     hemiSegs: {}, towerHits: {}, cityHit: false, ctaf: false, viol: 0, radioLog: [], warned: {}, seenUnder: null };
@@ -381,12 +383,16 @@ function call(g) {
 // ====================================================================
 function step(dt) {
   game.t += dt;
-  const turn = (hold.right || keys.ArrowRight ? 1 : 0) - (hold.left || keys.ArrowLeft ? 1 : 0);
-  pl.hdg = norm(pl.hdg + turn * 3 * dt);
+  // fly the heading bug: standard-rate turn (3°/s), easing in over the last few degrees
+  const e = angDiff(pl.bug, pl.hdg), trate = Math.sign(e) * Math.min(3, Math.abs(e) * 1.2);
+  pl.rate = Math.abs(e) < .05 ? 0 : trate; pl.hdg = norm(pl.hdg + pl.rate * dt); const turn = pl.rate;
+  const bankT = Math.atan(pl.rate * D2R * TAS * 1.6878 / 32.174) / D2R;   // bank for a coordinated turn at this rate
+  pl.bank += clamp(bankT - pl.bank, -12 * dt, 12 * dt);
   const dA = pl.tgt - pl.alt, rate = dA > 0 ? 700 / 60 : 800 / 60;
   pl.vs = Math.abs(dA) < 2 ? 0 : Math.sign(dA) * rate; pl.alt += clamp(dA, -rate * dt, rate * dt);
   pl.x = clamp(pl.x + Math.sin(pl.hdg * D2R) * NMPS * dt, WORLD.x0 + 1, WORLD.x1 - 1); pl.y = clamp(pl.y - Math.cos(pl.hdg * D2R) * NMPS * dt, WORLD.y0 + 1, WORLD.y1 - 1);
-  game.levelT = (pl.vs === 0 && turn === 0) ? game.levelT + dt : 0;
+  pl.patt += clamp((pl.vs > 0 ? 6 : pl.vs < 0 ? -2.5 : 2) - pl.patt, -3 * dt, 3 * dt);   // attitude for the instruments
+  game.levelT = (pl.vs === 0 && Math.abs(turn) < .05) ? game.levelT + dt : 0;
   rules();
 }
 function rules() {
@@ -591,7 +597,7 @@ addEventListener('keydown', e => {
   if (keys[e.code]) return; keys[e.code] = true; if (!running || game.over) return;
   if (game.quiz && !game.quiz.done) { const n = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code]; if (n !== undefined) answerQuiz(n); return; }
   if (!document.getElementById('sheet').hidden) { if (e.code === 'Escape' || e.code === 'Enter') closeSheet(); return; }
-  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyN: () => nav && nav.toggle(), KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); }, KeyL: land, Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
+  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyN: () => nav && nav.toggle(), KeyG: () => six && document.getElementById('bInst').classList.toggle('on', six.toggle()), KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#cfe8ff', 1.8); }, KeyL: land, Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; hold.left = hold.right = false; });
@@ -605,7 +611,8 @@ const holdBtn = (id, k) => { const b = document.getElementById(id); const on = e
 holdBtn('bLeft', 'left'); holdBtn('bRight', 'right');
 const tap = (id, f) => document.getElementById(id).addEventListener('click', f);
 tap('bUp', () => setTgt(500)); tap('bDown', () => setTgt(-500)); tap('bRadio', () => running && !game.over && openRadio()); tap('bView', () => toggleView()); tap('bChart', () => toggleChart());
-tap('bSpeed', cycleSpeed); tap('bZin', () => zoom(1.4)); tap('bZout', () => zoom(1 / 1.4)); tap('bPause', togglePause); tap('bNav', () => { if (nav) document.getElementById('bNav').classList.toggle('on', nav.toggle()); }); tap('landBtn', land);
+tap('bSpeed', cycleSpeed); tap('bZin', () => zoom(1.4)); tap('bZout', () => zoom(1 / 1.4)); tap('bPause', togglePause); tap('bNav', () => { if (nav) document.getElementById('bNav').classList.toggle('on', nav.toggle()); });
+tap('bInst', () => { if (six) document.getElementById('bInst').classList.toggle('on', six.toggle()); }); tap('landBtn', land);
 document.getElementById('sheetCard').addEventListener('click', e => { const t = e.target.closest('button'); if (!t) return; if (t.dataset.opt !== undefined) answerQuiz(+t.dataset.opt); else if (t.dataset.call) call(t.dataset.call); else if (t.hasAttribute('data-close')) closeSheet(); });
 function showSheet(on) { document.getElementById('sheet').hidden = !on; }
 function closeSheet() { showSheet(false); if (game.quiz && game.quiz.done) game.quiz = null; }
@@ -639,7 +646,7 @@ document.getElementById('toast').addEventListener('click', () => { document.getE
 // ====================================================================
 //  Navigator panel adapter: feeds NavPanel from the game state
 // ====================================================================
-let nav = null, navT = 0;
+let nav = null, navT = 0, six = null;
 const ANY = id => AP[id];
 function navData() {
   const N = game.nav, wp = ANY(N.wpt) || DEST, o = N.origin;
@@ -652,7 +659,7 @@ function navData() {
     gs: TAS, trk: norm(pl.hdg + VAR), dis: d2(wp), dtk: norm(brg(o[0], o[1], wp.x, wp.y) + VAR), wpt: wp.id, direct: N.direct, fpl, nearest: near,
     map: { range: 20, hdg: pl.hdg, items: AIRPORTS.filter(a => d2(a) < 30).map(a => ({ id: a.id, dx: a.x - pl.x, dy: a.y - pl.y, tw: !!a.tw })), leg: [[o[0] - pl.x, o[1] - pl.y], [wp.x - pl.x, wp.y - pl.y]] },
     com: { active: { name: game.lastFac, freq: FREQ[game.lastFac] }, standby: stby ? { name: stby.name, freq: FREQ[stby.name] } : { name: 'Guard', freq: FREQ.Guard } }, navaid: vor,
-    utils: [...(typeof terrainOn !== 'undefined' ? [{ id: 'terrain', label: '3D terrain', value: terrainOn ? 'ON' : 'OFF' }] : []), { id: 'quiz', label: 'Checkride questions', value: quizOn ? 'ON' : 'OFF' }, { id: 'speed', label: 'Sim speed', value: simRate + '×' }, { id: 'view', label: 'Camera / view', value: 'CYCLE' }, { id: 'fpl', label: 'Restore flight plan', value: `${START.id}→${DEST.id}` }],
+    utils: [{ id: 'bugdtk', label: 'Heading bug to DTK', value: hdg3(norm(brg(o[0], o[1], wp.x, wp.y) + VAR)) + '°' }, ...(typeof terrainOn !== 'undefined' ? [{ id: 'terrain', label: '3D terrain', value: terrainOn ? 'ON' : 'OFF' }] : []), { id: 'quiz', label: 'Checkride questions', value: quizOn ? 'ON' : 'OFF' }, { id: 'speed', label: 'Sim speed', value: simRate + '×' }, { id: 'view', label: 'Camera / view', value: 'CYCLE' }, { id: 'fpl', label: 'Restore flight plan', value: `${START.id}→${DEST.id}` }],
   };
 }
 function initNav() {
@@ -661,10 +668,18 @@ function initNav() {
   nav = new NavPanel({ mount: document.body, open: W >= 900, position: pos || undefined,
     onMove: p => { try { localStorage.setItem('sr.navpos', JSON.stringify(p)); } catch (_) {} },
     onDirectTo: id => { const a = ANY(id); if (!a || !game) return; game.nav = { ...game.nav, wpt: id, origin: [pl.x, pl.y], direct: true }; flash(`Direct to ${id}: ${hdg3(brg(pl.x, pl.y, a.x, a.y) + VAR)}°, ${d2(a).toFixed(1)} NM`, '#ff9ae8', 2.6); },
-    onAction: k => { if (k === 'terrain' && typeof setTerrainOn === 'function') setTerrainOn(!terrainOn); else if (k === 'quiz') setQuiz(!quizOn); else if (k === 'speed') cycleSpeed(); else if (k === 'view') toggleView();
+    onAction: k => { if (k === 'bugdtk') { const w = ANY(game.nav.wpt) || DEST, o = game.nav.origin; pl.bug = brg(o[0], o[1], w.x, w.y); } else if (k === 'terrain' && typeof setTerrainOn === 'function') setTerrainOn(!terrainOn); else if (k === 'quiz') setQuiz(!quizOn); else if (k === 'speed') cycleSpeed(); else if (k === 'view') toggleView();
       else if (k === 'fpl') game.nav = { plan: [START.id, DEST.id], wpt: DEST.id, origin: [START.x, START.y], direct: false }; navT = 0; } });
   document.getElementById('bNav').classList.toggle('on', nav.visible);
+  if (typeof SixPack !== 'undefined') {
+    let sp = null; try { sp = JSON.parse(localStorage.getItem('sr.sixpos') || 'null'); } catch (_) {}
+    six = new SixPack({ mount: document.body, open: W >= 1200, position: sp || undefined,
+      onBug: deg => { if (pl) pl.bug = norm(deg - VAR); },
+      onMove: p => { try { localStorage.setItem('sr.sixpos', JSON.stringify(p)); } catch (_) {} } });
+    document.getElementById('bInst').classList.toggle('on', six.visible);
+  } else document.getElementById('bInst').hidden = true;
 }
+function sixTick() { if (six && pl && six.visible) six.update({ ias: TAS, pitch: pl.patt, roll: pl.bank, alt: pl.alt, baro: 29.92, turn: pl.rate, slip: 0, hdg: norm(pl.hdg + VAR), bug: norm(pl.bug + VAR), vs: pl.vs * 60 }); }
 function navTick(now) { if (!nav || !game || !game.nav || !nav.visible || now - navT < 250) return; navT = now; nav.update(navData()); }
 
 // ====================================================================
@@ -682,10 +697,12 @@ function frame(now) {
     cam.T += (tT - cam.T) * k; cam.hz += (tH - cam.hz) * k; cam.yc += (tY - cam.yc) * k; if (cam.view === '2d' && cam.hz < .00005) cam.hz = 0;
     if (now - cam.lastPan > 5000) { cam.px *= 1 - Math.min(1, rdt * 2); cam.py *= 1 - Math.min(1, rdt * 2); }
     cam.cx = pl.x + cam.px; cam.cy = pl.y + cam.py;
-    rHdg.textContent = hdg3(pl.hdg + VAR) + '°'; rAlt.textContent = fmt(pl.alt); rTgt.textContent = pl.tgt !== Math.round(pl.alt) ? '→ ' + fmt(pl.tgt) : 'LEVEL'; rCrs.textContent = 'W29 ' + hdg3(brg(pl.x, pl.y, DEST.x, DEST.y) + VAR) + '°';
+    const slew = (hold.right || keys.ArrowRight ? 1 : 0) - (hold.left || keys.ArrowLeft ? 1 : 0);   // ◀ ▶ and ← → turn the heading bug
+    if (slew && !game.over) pl.bug = norm(pl.bug + slew * 45 * rdt);
+    rHdg.textContent = hdg3(pl.hdg + VAR) + '°'; rAlt.textContent = fmt(pl.alt); rTgt.textContent = pl.tgt !== Math.round(pl.alt) ? '→ ' + fmt(pl.tgt) : 'LEVEL'; rCrs.textContent = 'BUG ' + hdg3(pl.bug + VAR) + '°';
   }
   if (game && base) render();
-  navTick(now);
+  navTick(now); sixTick();
   requestAnimationFrame(frame);
 }
 function showEnd() {

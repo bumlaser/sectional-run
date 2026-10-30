@@ -9,7 +9,7 @@ if os.path.exists('data/derived/dem.json'): _w['dem'] = json.load(open('data/der
 w = json.dumps(_w, separators=(',', ':'))
 tac = 'data:image/jpeg;base64,' + base64.b64encode(open('data/derived/tac_warp.jpg', 'rb').read()).decode()
 fill = lambda s: s.replace('__WORLD__', w, 1).replace("'__TAC__'", "'" + tac + "'", 1)
-NAVJS = '<script>\n' + open('src/nav_panel.js').read() + '</script>\n'
+NAVJS = ''.join('<script>\n' + open(f).read() + '</script>\n' for f in ('src/nav_panel.js', 'src/sixpack_assets.js', 'src/six_pack.js'))
 src = src.replace('<script>\n\'use strict\';\nconst WD', NAVJS + '<script>\n\'use strict\';\nconst WD', 1)
 assert NAVJS in src, 'nav panel not inserted'
 head = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'

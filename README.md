@@ -34,6 +34,23 @@ The left strip shows GS, TRK, DIS and DTK. The right screen opens on a 2×3 home
 Nearest, Utilities). The bezel's HOME and D→ buttons return to the grid and open Direct-To. In the game,
 `navData()` in `src/game.html` is the adapter that builds the update from the game state.
 
+## Six-pack instruments (src/six_pack.js)
+
+This is a floating, draggable six-pack: airspeed, attitude, altimeter, turn coordinator, heading indicator and VSI.
+It uses the SVG artwork from [QFlightInstruments](https://github.com/marek-cel/QFlightinstruments)
+(MIT, © 2021 Marek M. Cel; see `third_party/qfi/LICENSE`). The Qt widgets can't run in a browser, so each gauge's
+240×240 SVG layers are stacked and rotated with CSS, using the same rotation centers and scale factors as the
+Qt code. `tools/build_sixpack_assets.py` packs svgo-optimized copies of the SVGs (5.6 MB down to 274 KB) into `src/sixpack_assets.js`.
+
+```js
+const six = new SixPack({ mount: document.body, onBug: deg => { /* new heading bug, magnetic */ } });
+six.update({ ias, pitch, roll, alt, baro, turn, slip, hdg, bug, vs });
+```
+
+The heading indicator has a **heading-bug knob**. Drag it round, scroll on it, or tap it to sync the bug to the
+current heading. The plane now flies to the bug at standard rate, and the dock's ◀ ▶ buttons and the arrow keys move
+the bug as well. The navigator's Utilities page can set the bug to the active DTK.
+
 ## Terrain and MEFs
 
 `tools/build_dem.py` downloads AWS Terrain Tiles (Terrarium encoding; USGS 3DEP, SRTM and others, via Mapzen) and
