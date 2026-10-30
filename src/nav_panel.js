@@ -12,8 +12,14 @@
  *   fpl     [{ id, name, dtk, dis, active }]          legs in order (the first entry is the departure, with no dtk/dis)
  *   nearest [{ id, name, dis, brg, tw }]              closest airports first (tw = towered)
  *   map     { range, items: [{ id, dx, dy, tw }], leg: [[dx0, dy0], [dx1, dy1]], hdg }   nm offsets from ownship, +x east, +y south
- *   com     { active: { freq, name }, standby: { freq, name } }   freq as '132.400'; shown in the header box
+ *   com     { active: { freq, name }, standby: { freq, name } }   freq as '132.400'; header, left (active) and middle (standby)
+ *   nav     { active: { freq, name }, standby: { freq, name } }   VOR freq as '116.85'; second header row
+ *   msgs    [{ who, text }] newest last · tfc { on, status } (omit to hide the TFC key)
  *   navaid  { id, name, dis, brg } · utils [{ id, label, value }]
+ *
+ * Layout (inside the screen): a header strip (15% of the height: active COM/NAV, standby COM/NAV, page pill),
+ * the body (a 25% column of four square GS/TRK/DIS/DTK blocks beside the 75% page area), and a bottom command
+ * bar (12%: MSG and TFC toggles on the left, Direct-To and a highlighted HOME on the right).
  */
 (function () {
   'use strict';
@@ -28,26 +34,42 @@
   .np-grip { width:44px; height:6px; border-radius:3px; background:repeating-linear-gradient(90deg,#4a5158 0 3px,transparent 3px 6px); }
   .np-brand { font:bold 9px "Courier New",monospace; letter-spacing:2px; color:#7d8892; }
   .np-close { width:22px; height:18px; border:1px solid #000; border-radius:4px; background:#23272b; color:#9aa6b0; font:bold 12px/1 "Courier New",monospace; cursor:pointer; padding:0; box-shadow:none; }
-  .np-screen { display:grid; grid-template-columns:80px minmax(0,1fr); grid-template-rows:100%; height:330px; background:#04080b; border:3px solid #000; border-radius:4px; overflow:hidden;
+  .np-screen { display:grid; grid-template-rows:15% 73% 12%; height:370px; background:#04080b; border:3px solid #000; border-radius:4px; overflow:hidden;
     box-shadow:0 0 0 1px #2f363c, inset 0 0 18px rgba(0,0,0,.9); }
-  .np-strip { display:grid; grid-template-rows:repeat(4,minmax(0,1fr)); gap:5px; min-height:0; padding:5px; border-right:1px solid #1d2a33; background:#060d12; }
-  .np-cell { display:flex; flex-direction:column; justify-content:center; padding:0 6px; min-height:0; border:1px solid #24343f; border-radius:5px;
-    background:linear-gradient(180deg,#03080b,#08131a); box-shadow:inset 0 2px 4px rgba(0,0,0,.85), inset 0 -1px 0 rgba(255,255,255,.04), 0 1px 0 rgba(255,255,255,.03); }
-  .np-cell b { font-size:16px !important; }
-  .np-cell small { font:bold 10px "Courier New",monospace; color:#4fd1e8; letter-spacing:1px; }
-  .np-cell b { font:bold 17px "Courier New",monospace; color:#f2f6f8; font-variant-numeric:tabular-nums; white-space:nowrap; }
-  .np-cell i { font:normal 9px "Courier New",monospace; color:#7c8a94; font-style:normal; }
-  .np-cell.np-mag b { color:#ff4fd8; }
+  /* header: active | standby | page pill */
+  .np-head { display:grid; grid-template-columns:40% 34% 26%; align-items:stretch; min-height:0; background:#0a1015; border-bottom:1px solid #333; }
+  .np-hcol { display:flex; flex-direction:column; justify-content:center; gap:1px; padding:0 6px; min-width:0; cursor:pointer; font-family:"Courier New",monospace; }
+  .np-hcol + .np-hcol { border-left:1px solid #1d2a33; }
+  .np-f { display:flex; align-items:baseline; justify-content:space-between; gap:4px; line-height:1.15; }
+  .np-f i { font-style:normal; font-size:8px; letter-spacing:.5px; color:#6f8290; }
+  .np-f b { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .np-hact b { font-size:15px; font-weight:bold; color:#39ff6a; text-shadow:0 0 6px rgba(57,255,106,.35); }
+  .np-hsby b { font-size:12px; font-weight:normal; color:#aab6be; }
+  .np-hpage { display:flex; align-items:center; justify-content:center; padding:0 5px; border-left:1px solid #1d2a33; min-width:0; }
+  .np-pill { display:block; max-width:100%; box-sizing:border-box; padding:4px 7px; border-radius:11px; background:#2b3034; border:1px solid #3c4349;
+    color:#fff; font:bold 10px "Courier New",monospace; letter-spacing:1px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* body: 25% telemetry stack | 75% page */
+  .np-body { display:grid; grid-template-columns:25% 75%; min-height:0; }
+  .np-strip { display:grid; grid-template-rows:repeat(4,1fr); min-height:0; border-right:1px solid #333; background:#060a0d; }
+  .np-cell { position:relative; display:flex; align-items:center; justify-content:center; margin:2px; aspect-ratio:1; min-height:0; box-sizing:border-box;
+    border:1px solid #333; border-radius:2px; background:#1b1e21; box-shadow:inset 0 1px 3px rgba(0,0,0,.85), inset 0 -1px 0 rgba(255,255,255,.04); }
+  .np-cell small { position:absolute; top:3px; left:4px; font:bold 8px "Courier New",monospace; letter-spacing:.5px; color:rgba(255,255,255,.5); }
+  .np-cell b { font:bold 16px "Courier New",monospace; color:#fff; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .np-cell i { position:absolute; right:4px; bottom:3px; font:normal 7px "Courier New",monospace; font-style:normal; color:rgba(255,255,255,.38); }
   .np-main { display:flex; flex-direction:column; min-width:0; min-height:0; }
-  .np-title { display:flex; align-items:center; justify-content:space-between; gap:6px; height:38px; padding:0 4px 0 8px; background:#0c1820; border-bottom:1px solid #1d2a33;
-    font:bold 11px "Courier New",monospace; letter-spacing:1px; color:#bcd0dc; }
-  .np-title [data-title] { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
-  .np-freq { display:grid; grid-template-rows:1fr 1fr; flex:none; padding:2px 6px; border:1px solid #2a3c48; border-radius:4px; background:#03070a;
-    box-shadow:inset 0 1px 3px rgba(0,0,0,.8); font-family:"Courier New",monospace; line-height:1.05; }
-  .np-f { display:flex; align-items:baseline; justify-content:flex-end; gap:5px; }
-  .np-f i { font-style:normal; font-size:8px; letter-spacing:.5px; color:#5d7280; }
-  .np-f b { font-size:13px; font-variant-numeric:tabular-nums; letter-spacing:.5px; }
-  .np-f.np-act b { color:#39ff6a; text-shadow:0 0 6px rgba(57,255,106,.35); } .np-f.np-sby b { color:#d8e2e8; font-size:12px; }
+  /* bottom command bar */
+  .np-bar { display:flex; align-items:center; gap:5px; padding:0 5px; min-height:0; background:#0a1015; border-top:1px solid #333; }
+  .np-sp { flex:1; }
+  .np-sq { position:relative; flex:none; height:80%; aspect-ratio:1; box-sizing:border-box; border:1px solid #333; border-radius:4px; padding:0; cursor:pointer;
+    background:linear-gradient(180deg,#2a2f33,#1a1d20); box-shadow:0 2px 0 #000, inset 0 1px 0 rgba(255,255,255,.08); color:#cfd8de; font:bold 9px "Courier New",monospace; letter-spacing:.5px; }
+  .np-sq:active { transform:translateY(1px); box-shadow:0 1px 0 #000; }
+  .np-sq.np-on { color:#39ff6a; border-color:#2c6a3c; }
+  .np-sq svg { width:22px; height:18px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; display:block; margin:auto; }
+  .np-sq.np-hi { background:linear-gradient(180deg,#5fe0f5,#25a9c4); border-color:#7eeaff; color:#03141a; box-shadow:0 2px 0 #000, 0 0 10px rgba(79,209,232,.45); }
+  .np-badge { position:absolute; top:-5px; right:-5px; min-width:14px; height:14px; padding:0 3px; box-sizing:border-box; border-radius:7px; background:#ffb000; color:#000; font:bold 9px/14px "Courier New",monospace; }
+  .np-badge:empty { display:none; }
+  .np-msg { padding:5px 7px; border-radius:5px; background:#0b151c; border:1px solid #16242e; font:11px/1.35 "Trebuchet MS",sans-serif; color:#dfe8ee; }
+  .np-msg b { font:bold 10px "Courier New",monospace; color:#4fd1e8; margin-right:5px; } .np-msg.np-you b { color:#ffb000; }
   .np-page { flex:1; min-height:0; overflow:auto; padding:8px; scrollbar-width:thin; }
   .np-grid { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(3,1fr); gap:8px; height:100%; }
   .np-key { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; border-radius:8px; cursor:pointer;
@@ -79,11 +101,6 @@
   .np-zoom button { width:30px; height:28px; border:0; margin:0; padding:0; background:transparent; color:#dfe8ee; font:bold 17px/1 "Courier New",monospace; cursor:pointer; box-shadow:none; }
   .np-zoom button + button { border-top:1px solid #2c4252; }
   .np-zoom button:active { background:#24506a; }
-  .np-keys { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
-  .np-hw { height:34px; border-radius:7px; border:2px solid #000; cursor:pointer; color:#cfd8de; font:bold 13px "Courier New",monospace;
-    background:linear-gradient(180deg,#3a4147,#24292d); box-shadow:0 3px 0 #000, inset 0 1px 0 rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; gap:6px; padding:0; }
-  .np-hw:active { transform:translateY(2px); box-shadow:0 1px 0 #000; }
-  .np-hw svg { width:22px; height:22px; stroke:#e6ecef; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   `;
   // simple stroked line icons, drawn for this component
   const ICON = {
@@ -109,21 +126,27 @@
       el.innerHTML = `<div class="np-bezel">
           <div class="np-top" data-drag><div class="np-grip"></div><span class="np-brand">NAV · 4.6</span><button class="np-close" type="button" data-close aria-label="Hide navigator">×</button></div>
           <div class="np-screen">
-            <div class="np-strip">
-              <div class="np-cell"><small>GS</small><b data-k="gs">---</b><i>KT</i></div>
-              <div class="np-cell"><small>TRK</small><b data-k="trk">---°</b><i>MAG</i></div>
-              <div class="np-cell np-mag"><small>DIS</small><b data-k="dis">--.-</b><i>NM</i></div>
-              <div class="np-cell np-mag"><small>DTK</small><b data-k="dtk">---°</b><i>MAG</i></div>
+            <div class="np-head">
+              <div class="np-hcol np-hact" data-go="navcom" aria-label="Active frequencies"><div class="np-f" data-fa-name><i>COM</i><b data-fa>---.---</b></div><div class="np-f" data-na-name><i>NAV</i><b data-na>---.--</b></div></div>
+              <div class="np-hcol np-hsby" data-go="navcom" aria-label="Standby frequencies"><div class="np-f" data-fs-name><i>STBY</i><b data-fs>---.---</b></div><div class="np-f" data-ns-name><i>STBY</i><b data-ns>---.--</b></div></div>
+              <div class="np-hpage"><span class="np-pill" data-title>HOME</span></div>
             </div>
-            <div class="np-main">
-              <div class="np-title"><span data-title>HOME</span>
-                <div class="np-freq" aria-label="COM frequencies"><div class="np-f np-act" data-fa-name><i>COM</i><b data-fa>---.---</b></div><div class="np-f np-sby" data-fs-name><i>STBY</i><b data-fs>---.---</b></div></div>
+            <div class="np-body">
+              <div class="np-strip">
+                <div class="np-cell"><small>GS</small><b data-k="gs">---</b><i>KT</i></div>
+                <div class="np-cell"><small>TRK</small><b data-k="trk">---°</b></div>
+                <div class="np-cell"><small>DIS</small><b data-k="dis">--.-</b><i>NM</i></div>
+                <div class="np-cell"><small>DTK</small><b data-k="dtk">---°</b></div>
               </div>
-              <div class="np-page" data-page></div></div>
-          </div>
-          <div class="np-keys">
-            <button class="np-hw" type="button" data-hw="home" aria-label="Home">${ICON.home}<span>HOME</span></button>
-            <button class="np-hw" type="button" data-hw="direct" aria-label="Direct-To">${ICON.direct}</button>
+              <div class="np-main"><div class="np-page" data-page></div></div>
+            </div>
+            <div class="np-bar">
+              <button class="np-sq" type="button" data-hw="msg" aria-label="Messages">MSG<span class="np-badge" data-badge></span></button>
+              <button class="np-sq" type="button" data-hw="tfc" aria-label="Traffic on or off" data-tfc>TFC</button>
+              <span class="np-sp"></span>
+              <button class="np-sq" type="button" data-hw="direct" aria-label="Direct-To">${ICON.direct}</button>
+              <button class="np-sq np-hi" type="button" data-hw="home" aria-label="Home">${ICON.home}</button>
+            </div>
           </div></div>`;
       (opts.mount || document.body).appendChild(el);
       this.$ = sel => el.querySelector(sel);
@@ -144,6 +167,14 @@
       const c = this.data.com || {}, a = c.active || {}, sb = c.standby || {};
       this.$('[data-fa]').textContent = a.freq || '---.---'; this.$('[data-fs]').textContent = sb.freq || '---.---';
       this.$('[data-fa-name]').title = a.name || ''; this.$('[data-fs-name]').title = sb.name || '';
+      const n = this.data.nav || {}, na = n.active || {}, ns = n.standby || {};
+      this.$('[data-na]').textContent = na.freq || '---.--'; this.$('[data-ns]').textContent = ns.freq || '---.--';
+      this.$('[data-na-name]').title = na.name || ''; this.$('[data-ns-name]').title = ns.name || '';
+      const msgs = this.data.msgs || [], last = msgs.length ? msgs[msgs.length - 1] : null, key = m => m.who + '|' + m.text;
+      if (this.page === 'msg' || this.seen === undefined) this.seen = last ? key(last) : '';
+      const si = msgs.findIndex(m => key(m) === this.seen), unread = this.seen === '' ? msgs.length : si < 0 ? msgs.length : msgs.length - 1 - si;
+      this.$('[data-badge]').textContent = unread > 0 ? Math.min(unread, 9) : '';
+      const tk = this.$('[data-tfc]'), t = this.data.tfc; tk.hidden = !t; if (t) { tk.classList.toggle('np-on', !!t.on); tk.title = t.on ? 'Traffic: ' + t.status : 'Traffic off'; }
       this.render();
     }
     show() { this.el.hidden = false; this.place(); this.render(true); }
@@ -165,6 +196,8 @@
       if (t.hasAttribute('data-close')) return this.hide();
       if (t.dataset.hw === 'home') return this.go('home');
       if (t.dataset.hw === 'direct') return this.go('direct');
+      if (t.dataset.hw === 'msg') return this.go(this.page === 'msg' ? 'home' : 'msg');
+      if (t.dataset.hw === 'tfc') { this.opts.onAction && this.opts.onAction('traffic'); return; }
       if (t.dataset.go) return this.go(t.dataset.go);
       if (t.dataset.dto) { this.opts.onDirectTo && this.opts.onDirectTo(t.dataset.dto); return this.go('fpl'); }
       if (t.dataset.act) { this.opts.onAction && this.opts.onAction(t.dataset.act); this.render(true); }
@@ -178,7 +211,7 @@
     }
     render(force) {
       if (this.el.hidden) return;
-      const d = this.data, P = this.page, title = { home: 'HOME', direct: 'DIRECT-TO', map: 'MAP', fpl: 'FLIGHT PLAN', proc: 'PROCEDURES', navcom: 'NAV / COM', nearest: 'NEAREST AIRPORT', utilities: 'UTILITIES' }[P];
+      const d = this.data, P = this.page, title = { home: 'HOME', direct: 'D→', map: 'MAP', fpl: 'FPL', proc: 'PROC', navcom: 'NAV/COM', nearest: 'NRST', utilities: 'UTIL', msg: 'MSG' }[P];
       this.$('[data-title]').textContent = title;
       const pg = this.$('[data-page]'); pg.classList.toggle('np-mappage', P === 'map');
       if (P === 'map') {
@@ -208,9 +241,12 @@
         const c = d.com || {}, n = d.navaid || {};
         const ca = c.active || {}, cs = c.standby || {};
         html = `<div class="np-kv"><span>COM ACT</span><b><span style="color:#39ff6a">${esc(ca.freq || '---.---')}</span> ${esc(ca.name || '')}</b><span>COM STBY</span><b>${esc(cs.freq || '---.---')} ${esc(cs.name || '')}</b>
-          <span>NAV</span><b>${n.id ? esc(n.id) + ' ' + esc(n.name || '') : '—'}</b><span>BRG / DIS</span><b>${n.id ? f3(n.brg) + '° · ' + fd(n.dis) + ' NM' : '—'}</b></div>
+          <span>NAV ACT</span><b><span style="color:#39ff6a">${esc(((d.nav || {}).active || {}).freq || '---.--')}</span> ${esc(((d.nav || {}).active || {}).name || '')}</b><span>NAV STBY</span><b>${esc(((d.nav || {}).standby || {}).freq || '---.--')} ${esc(((d.nav || {}).standby || {}).name || '')}</b>
+          <span>NEAREST</span><b>${n.id ? esc(n.id) + ' ' + esc(n.name || '') : '—'}</b><span>BRG / DIS</span><b>${n.id ? f3(n.brg) + '° · ' + fd(n.dis) + ' NM' : '—'}</b></div>
           <div class="np-note">Use the RADIO button to call a facility. The last one you called shows here as active.</div>`;
       } else if (P === 'proc') html = `<div class="np-note">No procedures are loaded for a VFR flight.<br><br>Departures, arrivals and approaches will show here when IFR mode arrives.</div>`;
+      else if (P === 'msg') { const m = (d.msgs || []).slice().reverse();
+        html = m.length ? `<div class="np-list">${m.map(x => `<div class="np-msg ${x.who === 'YOU' ? 'np-you' : ''}"><b>${esc(x.who)}</b>${esc(x.text)}</div>`).join('')}</div>` : '<div class="np-note">No messages.</div>'; }
       else if (P === 'utilities') html = `<div class="np-list">${(d.utils || []).map(u => `<button class="np-row np-tap" type="button" data-act="${esc(u.id)}"><span><b>${esc(u.label)}</b></span><span></span><span class="np-num">${esc(u.value)}</span></button>`).join('')}</div>`;
       if (force || html !== this.lastHtml) { const sc = pg.scrollTop; pg.innerHTML = html; pg.scrollTop = sc; this.lastHtml = html; }
     }

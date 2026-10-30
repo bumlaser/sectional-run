@@ -11,6 +11,7 @@ LAYERS = {
   'nda_tfr': ('National_Defense_Airspace_TFR_Areas', '1=1'),
   'airports': ('US_Airport', '1=1'),
   'navaids': ('NAVAIDSystem', '1=1'),
+  'navaid_freqs': ('NavaidComponents', 'NAV_TYPE=3'),   # VOR components, which carry the frequency
   'obstacles': ('Digital_Obstacle_File', 'AGL >= 300'),
   'runways': ('Runways', '1=1'),
 }

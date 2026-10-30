@@ -104,10 +104,11 @@ for f in json.load(open(D + 'obstacles.geojson'))['features']:
     if k not in cells or p['AMSL'] > cells[k]['m']:
         cells[k] = {'x': round(x, 2), 'y': round(y, 2), 'm': int(p['AMSL']), 'a': int(p['AGL']), 'l': 1 if (p['Lighting'] or 'N').strip() not in ('N', 'U', '') else 0, 't': (p['Type_Code'] or '').strip().lower()}
 obs = list(cells.values())
+vfreq = {f['properties']['IDENT']: round(f['properties']['FREQUENCY'], 2) for f in json.load(open(D + 'navaid_freqs.geojson'))['features'] if f['properties']['FREQUENCY']}
 vors = []
 for f in nav:
     p = f['properties']; lon, lat = f['geometry']['coordinates'][:2]; x, y = nm_xy(lat, lon)
-    if inreg(x, y) and 'VOR' in (p['CLASS_TXT'] or ''): vors.append({'id': p['IDENT'], 'n': p['NAME_TXT'], 'x': round(x, 2), 'y': round(y, 2), 'c': p['CLASS_TXT']})
+    if inreg(x, y) and 'VOR' in (p['CLASS_TXT'] or ''): vors.append({'id': p['IDENT'], 'n': p['NAME_TXT'], 'x': round(x, 2), 'y': round(y, 2), 'c': p['CLASS_TXT'], 'f': vfreq.get(p['IDENT'])})
 mask = base64.b64encode(open('charts/mask.png', 'rb').read()).decode()
 world = {'reg': {'x0': round(X0, 3), 'y0': round(Y0, 3), 'x1': round(X1, 3), 'y1': round(Y1, 3), 'clat': REG['clat'], 'clon': REG['clon'], 'cos': COS, 'maskPx': 10}, 'vols': vols, 'aps': aps, 'obs': obs, 'vors': vors, 'mask': mask}
 open('sectional/world.json', 'w').write(json.dumps(world, separators=(',', ':')))

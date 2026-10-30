@@ -34,7 +34,7 @@ m = patch(m, "const mimg = new Image();", "let maskReady = false;\nconst mimg = 
 m = patch(m, "  if (game && base) render();", "  if (game && base && typeof mapReady !== 'undefined' && mapReady) render();")
 m = patch(m, 'The SFRA and FRZ are approximate rings',
           'Base map © OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors, Positron style. Airspace heights are drawn at 2× vertical scale. The SFRA and FRZ are approximate rings')
-layer = open('src/map_layer.js').read() + """
+layer = open('src/map_layer.js').read() + open('src/live_traffic.js').read() + """
 function enableStart() { if (!(maskReady && mapReady)) return; const b = document.getElementById('startBtn'); b.disabled = false; b.textContent = 'Start flight'; }
 function mapReadyHook() { enableStart(); }
 """

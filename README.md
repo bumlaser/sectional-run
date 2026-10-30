@@ -24,15 +24,36 @@ scoped CSS (`np-` prefix), no dependencies and no flight logic of its own:
 ```js
 const nav = new NavPanel({ mount: document.body, open: true,
   onDirectTo: id => { /* make id the active waypoint */ },
-  onAction: name => { /* 'quiz' | 'speed' | 'view' | 'fpl' from the Utilities page */ } });
+  onAction: name => { /* 'quiz' | 'speed' | 'view' | 'fpl' | 'traffic' from Utilities or the TFC key */ } });
 // in your frame loop, about 4 times a second:
-nav.update({ gs, trk, dis, dtk, wpt, direct, fpl, nearest, map, com, navaid, utils });
-// com: { active: { freq: "128.700", name }, standby: { freq, name } } feeds the header frequency box
+nav.update({ gs, trk, dis, dtk, wpt, direct, fpl, nearest, map, com, nav, msgs, tfc, navaid, utils });
+// com / nav: { active: { freq: "128.700", name }, standby: { freq, name } } feed the header rows
 ```
 
-The left strip shows GS, TRK, DIS and DTK. The right screen opens on a 2×3 home grid (Map, FPL, Proc, Nav/Com,
-Nearest, Utilities). The bezel's HOME and D→ buttons return to the grid and open Direct-To. In the game,
-`navData()` in `src/game.html` is the adapter that builds the update from the game state.
+Inside the screen there are three bands:
+- **Header (15% of the height):** active COM and NAV in green, then standby COM and NAV, then a pill naming the
+  current page.
+- **Body:** a 25%-wide column of four square GS/TRK/DIS/DTK blocks, with the page area in the other 75%. The page
+  area opens on a 2×3 home grid: Map, FPL, Proc, Nav/Com, Nearest, Utilities.
+- **Command bar (12%):** MSG, which shows the radio log and badges new messages, and TFC, which toggles live
+  traffic and appears only in the 3D build. On the right are Direct-To and a highlighted HOME.
+
+NAV shows the nearest VOR as active and the next nearest in standby. Their frequencies come from the FAA
+NavaidComponents layer. In the game, `navData()` in `src/game.html` is the adapter that builds the update from the
+game state.
+
+## Live traffic (src/live_traffic.js, 3D build)
+
+Real aircraft from [adsb.lol](https://adsb.lol) (ODbL), within 40 NM of the map centre, refreshed every 5 seconds
+and dead-reckoned in between.
+- **2D:** the `flights-layer` symbols rotate with ground track, with callsign and altitude underneath.
+- **3D:** each aircraft also gets a marker at its real altitude, on the same 2× vertical scale as the airspace,
+  with a drop line to its label.
+- **Near you:** traffic within 3 NM and 1,000 ft turns amber.
+
+adsb.lol sends no CORS headers, so a page on github.io can't read it directly. Deploy `tools/traffic_relay.js` as
+a free Cloudflare Worker (instructions are in the file). Then open the game once with
+`?tfc=https://<worker>.workers.dev`, and it remembers the relay.
 
 ## Six-pack instruments (src/six_pack.js)
 

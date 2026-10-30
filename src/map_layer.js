@@ -213,6 +213,7 @@ render = function () {
   if (!mapReady || !pl) return;
   updateCamera();
   const now = performance.now(); if (now - planeT > 50) { planeT = now; updatePlane(); }   // ~20 Hz: rebuilding the plane geometry every frame is the costliest part
+  if (typeof trafficTick === 'function') trafficTick(now);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
   drawHUD();
 };
@@ -222,7 +223,7 @@ render = function () {
     map = new maplibregl.Map({ container: 'map', style: sectionalTint(style), center: c, zoom: 10.3, pitch: 62, bearing: 112, maxPitch: 78, dragPan: false, keyboard: false,
       pixelRatio: Math.min(devicePixelRatio || 1, 1.5),   // full Retina resolution costs a lot of GPU for little gain here
       attributionControl: { compact: true }, fadeDuration: 0 });
-    map.on('load', () => { addLayers(); wireGestures(); mapReady = true; mapReadyHook(); });
+    map.on('load', () => { addLayers(); if (typeof initTraffic === 'function') initTraffic(map); wireGestures(); mapReady = true; mapReadyHook(); });
     map.on('click', e => info(e.point.x, e.point.y));
   }).catch(err => { document.getElementById('startBtn').textContent = 'Map tiles unavailable'; console.error(err); });
 })();
