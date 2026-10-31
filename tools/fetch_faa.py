@@ -1,6 +1,6 @@
 import json, subprocess, sys, urllib.parse, os, time
 B = "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services"
-ENV = "-79.95,35.5,-71.65,40.28"   # Washington sectional bounds
+ENV = "-78.8,38.0,-72.7,41.7"   # the game region (tools/masks.py REG) plus a margin
 OUT = sys.argv[1]
 PAGE = 150
 ONLY = sys.argv[2:]

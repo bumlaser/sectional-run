@@ -1,12 +1,12 @@
 """Fetch AWS Terrain Tiles (Terrarium encoding) for the game region and build:
-  data/derived/dem.json  elevation grid in feet on the game's nm frame (0.25 nm cells), base64 uint16
+  data/derived/dem.json  elevation grid in feet on the game's nm frame (0.4 nm cells), base64 uint16
   MEF estimates per 15-minute quadrangle (terrain + obstacles)
 Run from the repo root. Tiles are cached in tools/.dem_cache (not committed)."""
 import math, os, json, base64, subprocess, sys, io, time
 import numpy as np
 from PIL import Image
 sys.path.insert(0, 'tools')
-REG = dict(lon0=-77.95, lon1=-75.95, lat0=38.55, lat1=39.82, clat=39.2, clon=-76.95)
+from masks import REG   # one region for every build step
 COS = math.cos(math.radians(REG['clat']))
 Z = 11; N = 2 ** Z; CACHE = 'tools/.dem_cache'; os.makedirs(CACHE, exist_ok=True)
 tx = lambda lon: (lon + 180) / 360 * N
@@ -26,7 +26,7 @@ def elev_m(lat, lon):
     fx, fy = tx(lon), ty(lat); X, Y = int(fx), int(fy); t = tiles[(X, Y)]
     px = min(255, int((fx - X) * 256)); py = min(255, int((fy - Y) * 256)); return t[py, px]
 # grid on the game's nm frame
-STEP = .25
+STEP = .4
 gx0, gy0 = (REG['lon0'] - REG['clon']) * 60 * COS, -(REG['lat1'] - REG['clat']) * 60
 gx1, gy1 = (REG['lon1'] - REG['clon']) * 60 * COS, -(REG['lat0'] - REG['clat']) * 60
 nx, ny = int((gx1 - gx0) / STEP) + 1, int((gy1 - gy0) / STEP) + 1

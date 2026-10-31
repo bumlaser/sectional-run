@@ -23,3 +23,4 @@ def load(prefix, p1, p2, lat0, lon0):
     return LCC(p1, p2, lat0, lon0, [float(v) for v in open(prefix + '.tfw').read().split()])
 TAC_BW = lambda d: load(d + '/bw_tac/Baltimore-Washington TAC', 45, 33, 38.99166666666667, -77.05)
 SEC_W = lambda d: load(d + '/wash_sec/Washington SEC', 38.66666666666666, 33.33333333333334, 38.16666666666666, -75.5)
+TAC_NY = lambda d: load(d + '/ny_tac/New York TAC', 45, 33, 40.74166666666667, -74)

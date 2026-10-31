@@ -40,8 +40,9 @@ def labelpt(rs):
             if d > best: best, bp = d, (x, y)
     return [round(bp[0], 2), round(bp[1], 2)], round(best, 2)
 def alt(val, code, uom):
-    if code == 'SFC' or val is None: return 0
+    if val is None: return 0
     v = float(val)
+    if code == 'SFC' and v <= 0: return 0   # a positive value with code SFC is a height above the surface (P-75: 1,000 ft); taken as MSL
     if v < 0: return 60000          # FAA code for unlimited
     return int(v * 100) if uom == 'FL' else int(v)
 vols = []
@@ -83,12 +84,12 @@ def expand_r4009(vols):
                      lp=[round(pcx, 2), round(pcy + 7, 2)], tou='WHEN A VIP IS AT CAMP DAVID (BY NOTAM)')
 expand_r4009(vols)
 # airports
-dlinks = {v['id'] for v in vols if v['k'] == 'D'}
+dlinks = {v['id'] for v in vols if v['k'] in ('C', 'D')}   # airports with a Class C or D have a tower
 aps = []
 for f in json.load(open(D + 'airports.geojson'))['features']:
     p = f['properties']; lon, lat = f['geometry']['coordinates'][:2]; x, y = nm_xy(lat, lon)
     if not inreg(x, y) or p['TYPE_CODE'] != 'AD' or p['PRIVATEUSE'] != 0 or p['OPERSTATUS'] != 'OPERATIONAL': continue
-    tw = p['IDENT'] in dlinks or p['IDENT'] in ('BWI', 'DCA', 'IAD', 'ADW')
+    tw = p['IDENT'] in dlinks or p['IDENT'] in ('BWI', 'DCA', 'IAD', 'ADW', 'PHL', 'EWR', 'JFK', 'LGA')   # plus the Class B primaries
     aps.append({'id': p['IDENT'], 'n': p['NAME'], 'x': round(x, 2), 'y': round(y, 2), 'e': round(p['ELEVATION'] or 0), 'tw': 1 if tw else 0, 'mil': 1 if p['MIL_CODE'] != 'CIVIL' else 0, 'gid': p['GLOBAL_ID'], 'rw': []})
 # runways: centreline from each runway outline (FAA ADDS Runways layer)
 bygid = {a['gid']: a for a in aps}

@@ -184,18 +184,39 @@ const windMag = w => w.spd < 3 ? 'CALM' : `${hdg3(Math.round(norm(w.dir + VAR) /
 const START = AP.FDK, DEST = AP.W29;
 // frequencies read from the FAA Baltimore–Washington TAC
 const FREQ = { 'Frederick Tower': '132.400', 'Potomac Approach': '128.700', 'Martin State Tower': '121.300', 'Easton Tower': '118.525', 'Hagerstown Tower': '120.300',
-  'Manassas Tower': '133.100', 'Bay Bridge CTAF': '122.725', 'Leesburg Radio': '122.200', 'Guard': '121.500' };
-const AP_FREQ = { FDK: 'CT 132.4', MTN: 'CT 121.3', ESN: 'CT 118.525', HGR: 'CT 120.3', HEF: 'CT 133.1', W29: 'CTAF 122.725' };
-const TOWER_NAMES = { FDK: 'Frederick Tower', MTN: 'Martin State Tower', ESN: 'Easton Tower', HGR: 'Hagerstown Tower', MRB: 'Martinsburg Tower', HEF: 'Manassas Tower', DAA: 'Davison Tower', NYG: 'Quantico Tower' };
+  'Manassas Tower': '133.100', 'Bay Bridge CTAF': '122.725', 'Leesburg Radio': '122.200', 'Guard': '121.500',
+  // Washington sectional and New York TAC tower tables
+  'Philadelphia Tower': '118.500', 'Northeast Philadelphia Tower': '126.900', 'New Castle Tower': '126.000', 'Lancaster Tower': '120.900', 'Harrisburg Tower': '124.800',
+  'Capital City Tower': '119.500', 'McGuire Tower': '118.650', 'Lakehurst Tower': '127.775', 'Dover Tower': '126.350', 'Atlantic City Tower': '120.300',
+  'Trenton Tower': '120.700', 'Teterboro Tower': '119.500', 'Newark Tower': '118.300', 'Morristown Tower': '118.100', 'Essex County Tower': '119.800',
+  'LaGuardia Tower': '118.700', 'Kennedy Tower': '119.100', 'Republic Tower': '118.800', 'Westchester Tower': '118.575', 'MacArthur Tower': '119.300' };
+const AP_FREQ = { FDK: 'CT 132.4', MTN: 'CT 121.3', ESN: 'CT 118.525', HGR: 'CT 120.3', HEF: 'CT 133.1', W29: 'CTAF 122.725', PHL: 'CT 118.5', PNE: 'CT 126.9', ILG: 'CT 126.0',
+  LNS: 'CT 120.9', MDT: 'CT 124.8', CXY: 'CT 119.5', ACY: 'CT 120.3', TTN: 'CT 120.7', TEB: 'CT 119.5', EWR: 'CT 118.3', MMU: 'CT 118.1', CDW: 'CT 119.8', LGA: 'CT 118.7', JFK: 'CT 119.1', FRG: 'CT 118.8', HPN: 'CT 118.575', ISP: 'CT 119.3' };
+const TOWER_NAMES = { FDK: 'Frederick Tower', MTN: 'Martin State Tower', ESN: 'Easton Tower', HGR: 'Hagerstown Tower', MRB: 'Martinsburg Tower', HEF: 'Manassas Tower', DAA: 'Davison Tower', NYG: 'Quantico Tower',
+  PHL: 'Philadelphia Tower', PNE: 'Northeast Philadelphia Tower', ILG: 'New Castle Tower', LNS: 'Lancaster Tower', MDT: 'Harrisburg Tower', CXY: 'Capital City Tower', WRI: 'McGuire Tower', NEL: 'Lakehurst Tower',
+  DOV: 'Dover Tower', ACY: 'Atlantic City Tower', TTN: 'Trenton Tower', TEB: 'Teterboro Tower', EWR: 'Newark Tower', MMU: 'Morristown Tower', CDW: 'Essex County Tower', LGA: 'LaGuardia Tower', JFK: 'Kennedy Tower',
+  FRG: 'Republic Tower', HPN: 'Westchester Tower', ISP: 'MacArthur Tower' };
+// Class B approach controls. Frequencies from the sectional / New York TAC panels, picked by magnetic bearing from the primary airport.
+const BRAVO = {
+  'WASHINGTON-TRI AREA CLASS B': { fac: 'Potomac Approach', ap: 'BWI', sect: [[181, 19, '128.700'], [20, 100, '119.000'], [101, 130, '124.550'], [131, 180, '119.700']] },
+  'PHILADELPHIA CLASS B': { fac: 'Philadelphia Approach', ap: 'PHL', sect: [[0, 89, '123.800'], [90, 224, '127.350'], [225, 269, '118.350'], [270, 359, '124.350']] },
+  'NEW YORK CLASS B': { fac: 'New York Approach', ap: 'JFK', sect: [[71, 141, '125.700'], [142, 230, '128.125'], [231, 269, '128.550'], [270, 328, '127.600'], [329, 70, '126.400']] },
+};
+// Class C approach controls (Washington sectional / New York TAC panels). Allentown's is on the New York sectional, which we don't have.
+const CHARLIE = { MDT: { fac: 'Harrisburg Approach', ap: 'MDT', sect: [[330, 79, '118.250'], [80, 179, '126.450'], [180, 329, '124.100']] },
+  ACY: { fac: 'Atlantic City Approach', ap: 'ACY', sect: [[130, 309, '124.600'], [310, 129, '134.250']] },
+  ISP: { fac: 'New York Approach', ap: 'ISP', sect: [[0, 359, '120.050']] }, ABE: { fac: 'Allentown Approach', ap: 'ABE', sect: [] } };
+function bravoFreq(b) { if (!b.sect.length) return ''; const a = AP[b.ap]; if (!a) return ''; const m = Math.round(norm(brg(a.x, a.y, pl.x, pl.y) + VAR));
+  const s = b.sect.find(([lo, hi]) => lo <= hi ? m >= lo && m <= hi : m >= lo || m <= hi); return s ? s[2] : b.sect[0][2]; }
 const VOL = WD.vols.map((v, i) => {
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const r of v.r) for (const [x, y] of r) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
-  const grp = v.k === 'B' ? 'B' : v.k === 'D' ? 'D:' + v.id : v.k === 'R' || v.k === 'P' || v.k === 'MOA' ? v.k + ':' + v.n.replace(/[A-C]$/, '') : v.k;
+  const grp = v.k === 'B' ? 'B:' + v.n : v.k === 'D' ? 'D:' + v.id : v.k === 'C' ? 'C:' + v.id : v.k === 'R' || v.k === 'P' || v.k === 'MOA' ? v.k + ':' + v.n.replace(/[A-C]$/, '') : v.k;
   return { ...v, i, grp, bb: [x0, y0, x1, y1] };
 });
 const horiz = (v, x, y) => x >= v.bb[0] && x <= v.bb[2] && y >= v.bb[1] && y <= v.bb[3] && inRings(x, y, v.r);
 const insideVol = (v, x, y, alt) => alt >= v.fl && alt < v.ce && horiz(v, x, y);
 const volDist = (v, x, y) => horiz(v, x, y) ? 0 : edgeDist(x, y, v.r);
-const RULED = ['B', 'D', 'SFRA', 'FRZ', 'P', 'R', 'MOA'];
+const RULED = ['B', 'C', 'D', 'SFRA', 'FRZ', 'P', 'R', 'MOA'];
 const TOWERS = WD.obs;
 const VORS = WD.vors.map(v => ({ ...v, r: 5 }));
 const CHECKPOINTS = [['LIBERTY RES', 39.405, -76.905], ['LOCH RAVEN RES', 39.44, -76.545], ['PRETTYBOY RES', 39.625, -76.72], ['SPARROWS POINT', 39.215, -76.475], ['BAY BRIDGE', 38.993, -76.383], ['SUGARLOAF MTN', 39.263, -77.394]]
@@ -224,7 +245,7 @@ const isWater = (x, y) => maskAt(x, y) === 1, isTown = (x, y) => maskAt(x, y) ==
 // ====================================================================
 //  Base map (stylized) — built after the mask loads
 // ====================================================================
-const PXN = 22, CS = .32;
+const PXN = Math.min(22, Math.floor(Math.sqrt(9e6 / ((WD.reg.x1 - WD.reg.x0) * (WD.reg.y1 - WD.reg.y0))))), CS = .32;   // ≤ ~9 Mpx world image
 const CROPS = ['#7d9a4b', '#8fa957', '#a9a65d', '#c2b071', '#6f8f43', '#99b062', '#b89f62', '#88a35a', '#7a9550', '#a3b56c'];
 let NI, NJ, CELLS, base = null, tacImg = null;
 const cellAt = (i, j) => CELLS[j * NI + i];
@@ -286,7 +307,7 @@ function newGame() {
   pl = { x: sx, y: sy, hdg: crs, bug: crs, alt: 2300, tgt: 2500, vs: 0, rate: 0, bank: 0, patt: 2 };
   for (const v of VOL) if (v.k === 'R') SUA_STATUS[v.grp] = v.grp === 'R:R-4009' ? (SUA_STATUS[v.grp] ?? Math.random() < .4)   // R-4009: hot only while a VIP is at Camp David (random each session); P-40 below it is always active
     : /CONT|0000-2400/i.test(v.tou) ? true : (SUA_STATUS[v.grp] ?? Math.random() < .6);
-  game = { t: 0, score: 0, log: [], over: false, inside: {}, contact: { 'D:FDK': true }, clrB: null, asked: {}, quiz: null, correct: 0, quizzes: 0, levelT: 0,
+  game = { t: 0, score: 0, log: [], over: false, inside: {}, contact: { 'D:FDK': true }, clrB: {}, asked: {}, quiz: null, correct: 0, quizzes: 0, levelT: 0,
     hemiSegs: {}, towerHits: {}, cityHit: false, ctaf: false, viol: 0, radioLog: [], warned: {}, seenUnder: null };
   game.radioLog.push({ who: 'TWR', text: 'N421AP, Frederick Tower, frequency change approved. Good day.', t: 0 });
   game.nav = { plan: [START.id, DEST.id], wpt: DEST.id, origin: [START.x, START.y], direct: false }; game.lastFac = 'Frederick Tower';
@@ -326,7 +347,7 @@ const QUIZ = [
   { id: 'modec', when: () => game.asked.fdk && game.t > 20 && game.inside.MODEC, kicker: 'Mode C veil', q: () => `You're inside the thin magenta 30 NM ring around ${({ BWI: 'BWI', IAD: 'Dulles (IAD)', DCA: 'Reagan National (DCA)', ADW: 'Andrews (ADW)' })[game.inside.MODEC.id] || 'a Class B airport'}, the Mode C veil. What does your airplane need inside it?`,
     a: ['A Mode C (altitude-reporting) transponder and ADS-B Out, from the surface up to 10,000 ft MSL', 'An explicit Class B clearance', 'Two-way radio communication with BWI tower'],
     why: 'The Mode C veil is an equipment rule, not airspace you need permission for. Within 30 NM of a Class B primary airport you need an altitude-encoding transponder and ADS-B Out.' },
-  { id: 'bReq', when: () => nearGrp('B') < 2.5, kicker: 'Washington Tri-Area Class B', q: 'The solid blue lines ahead are the Washington Tri-Area Class B. What do you need to enter it?',
+  { id: 'bReq', when: () => nearGrp('B:WASHINGTON-TRI AREA CLASS B') < 2.5, kicker: 'Washington Tri-Area Class B', q: 'The solid blue lines ahead are the Washington Tri-Area Class B. What do you need to enter it?',
     a: ['An explicit clearance: "cleared into the Class Bravo airspace"', 'Two-way radio communication is enough', 'Just a Mode C transponder'],
     why: 'Class B is the only class that requires an explicit clearance. Potomac Approach saying your callsign isn\'t enough; listen for "cleared into the Class Bravo".' },
   { id: 'bShelf', when: () => { const v = VOL.find(v => v.k === 'B' && v.fl > 0 && horiz(v, pl.x, pl.y) && pl.alt < v.fl); if (v) game.seenUnder = v; return !!v && game.asked.bReq; }, kicker: 'Under the Bravo',
@@ -390,14 +411,17 @@ function answerQuiz(i) {
 // ====================================================================
 function facilities() {
   const list = [];
-  if (d2(AP.BWI) < 45) list.push({ g: 'B', name: 'Potomac Approach', note: 'Class B / flight following', x: AP.BWI.x, y: AP.BWI.y, act: 'Request Bravo transition' });
+  for (const [n, b] of Object.entries(BRAVO)) { const a = AP[b.ap]; if (!a || d2(a) > 45) continue; FREQ[b.fac] = bravoFreq(b);
+    list.push({ g: 'B:' + n, name: b.fac, note: 'Class B / flight following', x: a.x, y: a.y, act: 'Request Bravo transition' }); }
+  for (const v of VOL) if (v.k === 'C' && CHARLIE[v.id] && AP[v.id] && d2(AP[v.id]) < 20 && !list.some(f => f.g === v.grp)) { const c = CHARLIE[v.id]; FREQ[c.fac] = bravoFreq(c);
+    list.push({ g: v.grp, name: c.fac, note: `Class C to ${fmt(v.ce)}`, x: AP[v.id].x, y: AP[v.id].y, act: 'Call' }); }
   for (const v of VOL) if (v.k === 'D' && AP[v.id] && d2(AP[v.id]) < 14 && !list.some(f => f.g === v.grp)) list.push({ g: v.grp, name: TOWER_NAMES[v.id] || AP[v.id].n + ' Tower', note: `Class D to ${fmt(v.ce)}`, x: AP[v.id].x, y: AP[v.id].y, act: 'Call' });
   if (d2(DEST) < 16) list.push({ g: 'CTAF', name: 'Bay Bridge CTAF', note: 'self-announce (no tower)', x: DEST.x, y: DEST.y, act: 'Announce' });
   return list;
 }
 function posn(x, y) { const d = Math.hypot(pl.x - x, pl.y - y), b = brg(x, y, pl.x, pl.y); return `${Math.round(d)} miles ${['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(b / 45) % 8]} at ${fmt(pl.alt)}`; }
 function openRadio() {
-  const rows = facilities().map(f => { const st = f.g === 'B' && game.clrB ? '<span class="pos">CLEARED ✓</span>' : game.contact[f.g] ? '<span class="pos">TWO-WAY ✓</span>' : f.g === 'CTAF' && game.ctaf ? '<span class="pos">ANNOUNCED ✓</span>' : '';
+  const rows = facilities().map(f => { const st = f.g.startsWith('B:') && game.clrB[f.g] ? '<span class="pos">CLEARED ✓</span>' : game.contact[f.g] ? '<span class="pos">TWO-WAY ✓</span>' : f.g === 'CTAF' && game.ctaf ? '<span class="pos">ANNOUNCED ✓</span>' : '';
     return `<div class="fac"><div><b>${f.name}</b> ${st}<br><small>${FREQ[f.name] ? FREQ[f.name] + ' · ' : ''}${f.note} · ${Math.hypot(pl.x - f.x, pl.y - f.y).toFixed(0)} NM</small></div><button type="button" data-call="${f.g}">${f.act}</button></div>`; }).join('');
     const fss = `<div class="fac"><div><b>Leesburg Radio (Flight Service)</b><br><small>122.200 · special use airspace status</small></div><button type="button" data-call="FSS">SUA status?</button></div>`;
   const log = game.radioLog.slice(-4).map(m => `<p style="margin:4px 0;font-size:12px;color:${m.who === 'YOU' ? '#1F5493' : '#13803d'}">${m.who}: ${m.text}</p>`).join('');
@@ -408,14 +432,19 @@ function call(g) {
   if (g === 'QUIZ') { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#9CC9FF', 1.8); return openRadio(); }
   if (g === 'FSS') { game.lastFac = 'Leesburg Radio'; radioMsg('YOU', 'Leesburg Radio, N421AP, request status of the restricted areas along the bay.'); radioMsg('FSS', `N421AP, ${rStatusLine().replace(/<\/?b>/g, '')}. And remember, no SFRA flight plan on file for you.`); return openRadio(); }
   const f = facilities().find(f => f.g === g); if (!f) return; game.lastFac = f.name;
-  if (g === 'B') {
-    radioMsg('YOU', `Potomac Approach, N421AP, ${posn(AP.BWI.x, AP.BWI.y)} of BWI, request Class Bravo transition eastbound to Bay Bridge.`);
-    if (Math.random() < .65) { const maxA = clamp(Math.ceil(pl.alt / 500) * 500, 2500, 4500); game.clrB = { maxA }; game.contact.B = true; radioMsg('ATC', `N421AP, squawk 4211, radar contact. Cleared into the Class Bravo airspace, maintain VFR at or below ${fmt(maxA)}.`); }
-    else { game.contact.B = true; radioMsg('ATC', 'N421AP, radar contact. Remain outside Class Bravo airspace, traffic volume. Flight following approved.'); }
+  if (g.startsWith('B:')) {
+    const a = AP[BRAVO[g.slice(2)].ap], dir = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(norm(pl.hdg) / 45) % 8];
+    radioMsg('YOU', `${f.name}, N421AP, ${posn(a.x, a.y)} of ${a.id}, request Class Bravo transition ${dir}bound.`);
+    if (Math.random() < .65) { const maxA = clamp(Math.ceil(pl.alt / 500) * 500, 2500, 4500); game.clrB[g] = { maxA }; game.contact[g] = true; radioMsg('ATC', `N421AP, squawk 4211, radar contact. Cleared into the Class Bravo airspace, maintain VFR at or below ${fmt(maxA)}.`); }
+    else { game.contact[g] = true; radioMsg('ATC', 'N421AP, radar contact. Remain outside Class Bravo airspace, traffic volume. Flight following approved.'); }
   } else if (g.startsWith('D:')) {
     radioMsg('YOU', `${f.name}, N421AP, ${posn(f.x, f.y)}, transitioning your Delta eastbound.`);
     if (Math.random() < .85) { game.contact[g] = true; radioMsg('TWR', `N421AP, ${f.name}, transition approved, report clear of the Delta.`); }
     else radioMsg('TWR', `Aircraft calling ${f.name}, standby.`), flash('No callsign in that reply. Two-way comms are NOT established yet.', '#FFB84D', 3.6);
+  } else if (g.startsWith('C:')) {
+    radioMsg('YOU', `${f.name}, N421AP, ${posn(f.x, f.y)}, request to transit your Charlie.`);
+    if (Math.random() < .9) { game.contact[g] = true; radioMsg('ATC', `N421AP, ${f.name}, radar contact, ${posn(f.x, f.y).replace(/ at [\d,]+$/, '')}. Maintain VFR.`); }
+    else radioMsg('ATC', `Aircraft calling ${f.name}, standby.`), flash('No callsign in that reply. Two-way comms are NOT established yet.', '#FFB84D', 3.6);
   } else if (g === 'CTAF') { game.ctaf = true; radioMsg('YOU', `Bay Bridge traffic, Skyhawk N421AP, ${posn(DEST.x, DEST.y)}, inbound for landing, Bay Bridge.`); }
   openRadio();
 }
@@ -453,7 +482,7 @@ function rules() {
   for (const v of VOL) if ((RULED.includes(v.k) || v.k === 'MODEC') && insideVol(v, pl.x, pl.y, pl.alt)) now[v.grp] = now[v.grp] || v;
   for (const g in now) if (!game.inside[g]) enter(g, now[g]);
   game.inside = now;
-  if (now.B && game.clrB && pl.alt > game.clrB.maxA + 150 && !game.warned.bAlt) { game.warned.bAlt = true; addScore(-50, `Above your Bravo altitude (${fmt(game.clrB.maxA)})`); }
+  for (const g in now) { const c = game.clrB[g]; if (g.startsWith('B:') && c && pl.alt > c.maxA + 150 && !game.warned['bAlt' + g]) { game.warned['bAlt' + g] = true; addScore(-50, `Above your Bravo altitude (${fmt(c.maxA)})`); } }
   TOWERS.forEach((t, i) => { if (!game.towerHits[i] && Math.hypot(pl.x - t.x, pl.y - t.y) < .35 && pl.alt < t.m + 300) { game.towerHits[i] = true; addScore(-150, `Too close to a ${fmt(t.m)} ft obstacle`); } });
   if (!game.cityHit && isTown(pl.x, pl.y) && pl.alt - elev(pl.x, pl.y) < 1000 && d2(DEST) > 3 && d2(START) > 3) { game.cityHit = true; addScore(-40, 'Below 1,000 ft over a congested area'); }
   const agl = pl.alt - elev(pl.x, pl.y);
@@ -463,7 +492,9 @@ function rules() {
   updateLand(); checkQuizzes();
 }
 function enter(g, v) {
-  if (v.k === 'B') { if (!game.clrB) { game.viol++; addScore(-300, 'Class B bust: no clearance'); radioMsg('ATC', 'N421AP, Potomac Approach, possible pilot deviation. Advise you call this number…'); } else flash('Inside Class B under your clearance', '#71CF88'); }
+  if (v.k === 'B') { if (!game.clrB[g]) { game.viol++; addScore(-300, 'Class B bust: no clearance'); radioMsg('ATC', `N421AP, ${(BRAVO[v.n] || { fac: 'Approach' }).fac}, possible pilot deviation. Advise you call this number…`); } else flash('Inside Class B under your clearance', '#71CF88'); }
+  else if (v.k === 'C') { const nm = v.n.replace(/ (INTERNATIONAL AIRPORT )?CLASS C/, '');
+    if (!game.contact[g]) { game.viol++; addScore(-150, `Entered ${nm} Class C without two-way comms`); } else flash(`In the ${nm} Class C, in contact`, '#71CF88'); }
   else if (v.k === 'D') { if (!game.contact[g]) { game.viol++; addScore(-150, `Entered ${v.n.replace(' CLASS D', '')} Class D without two-way comms`); } else flash(`In the ${v.n.replace(' CLASS D', '')} Class D, in contact`, '#71CF88'); }
   else if (v.k === 'SFRA') { game.viol++; addScore(-400, 'Entered the DC SFRA without a flight plan!'); radioMsg('ATC', 'N421AP, Potomac Approach, you are inside the SFRA without authorization. Turn immediately to exit, and expect a phone number.'); }
   else if (v.k === 'FRZ') { game.viol++; addScore(-800, 'Penetrated the DC Flight Restricted Zone!'); }
@@ -533,6 +564,7 @@ function drawChart2D() {
     if (v.k === 'MODEC') { ctx.strokeStyle = 'rgba(168,50,127,.8)'; ctx.lineWidth = 1.4; ringsPath(v.r); ctx.stroke(); continue; }
     if (v.k === 'E2') { ctx.strokeStyle = MAG; ctx.lineWidth = 2; ctx.setLineDash([8, 5]); ringsPath(v.r); ctx.stroke(); ctx.setLineDash([]); continue; }
     if (v.k === 'B') { ctx.strokeStyle = BLUE; ctx.lineWidth = 2.6; ringsPath(v.r); ctx.stroke(); if (s > 7) frac(label100(v.ce), label100(v.fl), lx, ly, BLUE); continue; }
+    if (v.k === 'C') { ctx.strokeStyle = MAG; ctx.lineWidth = 2.4; ringsPath(v.r); ctx.stroke(); if (s > 7) frac(label100(v.ce), v.fl ? label100(v.fl) : 'SFC', lx, ly, MAG); continue; }
     if (v.k === 'D') { ctx.strokeStyle = BLUE; ctx.lineWidth = 2.2; ctx.setLineDash([9, 6]); ringsPath(v.r); ctx.stroke(); ctx.setLineDash([]);
       const bx = P(v.bb[2], 0)[0] - (P(v.bb[2], 0)[0] - P(v.bb[0], 0)[0]) * .18, by = P(0, v.bb[1])[1] + (P(0, v.bb[3])[1] - P(0, v.bb[1])[1]) * .18;
       ctx.save(); ctx.setLineDash([3, 2]); ctx.strokeStyle = BLUE; ctx.lineWidth = 1.4; ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillRect(bx - 13, by - 9, 26, 18); ctx.strokeRect(bx - 13, by - 9, 26, 18); ctx.restore(); label(label100(v.ce), bx, by + 1, BLUE, 12, '900'); continue; }
@@ -576,7 +608,7 @@ function drawAirports() {
 function drawVolumes3D() {
   const cap = z => Math.min(z, 12500), order = VOL.filter(v => RULED.includes(v.k) && visibleVol(v)).sort((a, b) => (b.bb[2] - b.bb[0]) * (b.bb[3] - b.bb[1]) - (a.bb[2] - a.bb[0]) * (a.bb[3] - a.bb[1]));
   for (const v of order) {
-    const fl = cap(v.fl), ce = cap(v.ce), rgb = v.k === 'MOA' ? '168,50,127' : '29,95,174', alpha = v.k === 'SFRA' ? .035 : v.k === 'MOA' ? .05 : v.k === 'B' ? .085 : .12;
+    const fl = cap(v.fl), ce = cap(v.ce), rgb = v.k === 'MOA' || v.k === 'C' ? '168,50,127' : '29,95,174', alpha = v.k === 'SFRA' ? .035 : v.k === 'MOA' ? .05 : v.k === 'B' ? .085 : .12;
     for (const ring of v.r) { const n = ring.length, step = Math.max(1, Math.floor(n / 90)), edges = [];
       for (let i = 0; i < n; i += step) edges.push([ring[i], ring[(i + step) % n]]);
       edges.sort((e1, e2) => (e1[0][1] + e1[1][1]) - (e2[0][1] + e2[1][1]));
@@ -586,7 +618,7 @@ function drawVolumes3D() {
     ringsPath(v.r, fl); ctx.setLineDash([5, 5]); ctx.strokeStyle = `rgba(${rgb},.5)`; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
     if (Math.hypot(v.lp[0] - pl.x, v.lp[1] - pl.y) > 22) continue;
     const [lx, ly] = P(...v.lp, ce);
-    const txt = v.k === 'B' ? `${label100(v.ce)}/${label100(v.fl)}` : v.k === 'D' ? `[${label100(v.ce)}] ${v.id}` : v.k === 'SFRA' ? 'DC SFRA SFC–FL180' : v.k === 'FRZ' ? 'DC FRZ' : `${v.n} ${v.fl ? fmt(v.fl) : 'SFC'}–${v.ce >= 60000 ? 'UNLTD' : fmt(v.ce)}`;
+    const txt = v.k === 'B' || v.k === 'C' ? `${label100(v.ce)}/${v.fl ? label100(v.fl) : 'SFC'}` : v.k === 'D' ? `[${label100(v.ce)}] ${v.id}` : v.k === 'SFRA' ? 'DC SFRA SFC–FL180' : v.k === 'FRZ' ? 'DC FRZ' : `${v.n} ${v.fl ? fmt(v.fl) : 'SFC'}–${v.ce >= 60000 ? 'UNLTD' : fmt(v.ce)}`;
     label(txt, lx, ly, v.k === 'MOA' ? MAG : BLUE, 11, '900');
   }
 }
@@ -611,12 +643,12 @@ function panel(x, y, w, h) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ct
 function txt(s, x, y, font, color, align = 'left') { ctx.font = font; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = color; ctx.fillText(s, x, y); }
 function wrapT(s, maxW) { const words = s.split(' '), out = []; let cur = ''; for (const w of words) { const t = cur ? cur + ' ' + w : w; if (ctx.measureText(t).width > maxW && cur) { out.push(cur); cur = w; } else cur = t; } if (cur) out.push(cur); return out; }
 function airspaceNow() {
-  const ins = VOL.filter(v => RULED.includes(v.k) && insideVol(v, pl.x, pl.y, pl.alt)), names = [...new Set(ins.map(v => v.k === 'B' ? 'Class B' : v.k === 'D' ? `Class D (${v.id})` : v.k === 'SFRA' ? 'DC SFRA' : v.k === 'FRZ' ? 'DC FRZ' : v.n))];
+  const ins = VOL.filter(v => RULED.includes(v.k) && insideVol(v, pl.x, pl.y, pl.alt)), names = [...new Set(ins.map(v => v.k === 'B' ? 'Class B' : v.k === 'D' ? `Class D (${v.id})` : v.k === 'C' ? `Class C (${v.id})` : v.k === 'SFRA' ? 'DC SFRA' : v.k === 'FRZ' ? 'DC FRZ' : v.n))];
   const e2 = VOL.find(v => v.k === 'E2' && insideVol(v, pl.x, pl.y, pl.alt)), under = VOL.filter(v => v.k === 'B' && horiz(v, pl.x, pl.y) && pl.alt < v.fl).sort((a, b) => a.fl - b.fl)[0];
   const veil = VOL.some(v => v.k === 'MODEC' && insideVol(v, pl.x, pl.y, pl.alt));
   const main = names.length ? names.join(' + ') : e2 ? 'Class E (surface)' : 'Class E';
   const note = under ? `under Bravo shelf ${label100(under.ce)}/${label100(under.fl)} (floor ${fmt(under.fl)})` : `${veil ? 'Mode C veil · ' : ''}ground ${fmt(elev(pl.x, pl.y))} ft${DEM ? ` · MEF ${fmt(mefAt(pl.x, pl.y))}` : ' (estimated)'}`;
-  const bad = ins.some(v => (v.k === 'B' && !game.clrB) || v.k === 'P' || v.k === 'SFRA' || v.k === 'FRZ' || (v.k === 'R' && SUA_STATUS[v.grp]) || (v.k === 'D' && !game.contact[v.grp]));
+  const bad = ins.some(v => (v.k === 'B' && !game.clrB[v.grp]) || v.k === 'P' || v.k === 'SFRA' || v.k === 'FRZ' || (v.k === 'R' && SUA_STATUS[v.grp]) || ((v.k === 'D' || v.k === 'C') && !game.contact[v.grp]));
   return { main, note, bad };
 }
 // Windsock beside each airport once you're zoomed in close enough to see the field. The direction comes from

@@ -8,7 +8,8 @@ src = open('src/game.html').read(); _w = json.load(open('data/derived/world.json
 if os.path.exists('data/derived/dem.json'): _w['dem'] = json.load(open('data/derived/dem.json'))
 w = json.dumps(_w, separators=(',', ':'))
 tac = 'data:image/jpeg;base64,' + base64.b64encode(open('data/derived/tac_warp.jpg', 'rb').read()).decode()
-fill = lambda s: s.replace('__WORLD__', w, 1).replace("'__TAC__'", "'" + tac + "'", 1)
+fill = lambda s, t=None: s.replace('__WORLD__', w, 1).replace("'__TAC__'", "'" + (t or tac) + "'", 1)
+TINY = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='   # the 3D build streams the FAA charts, so it skips the canvas chart image
 NAVJS = ''.join('<script>\n' + open(f).read() + '</script>\n' for f in ('src/nav_panel.js', 'src/sixpack_assets.js', 'src/six_pack.js', 'src/gauge_strip.js'))
 src = src.replace('<script>\n\'use strict\';\nconst WD', NAVJS + '<script>\n\'use strict\';\nconst WD', 1)
 assert NAVJS in src, 'nav panel not inserted'
@@ -40,7 +41,7 @@ function mapReadyHook() { enableStart(); }
 """
 i = m.rindex('</script>\n') + len('</script>\n')   # after the game's own script
 m = m[:i] + '<script>\n' + layer + '</script>\n' + m[i:]
-os.makedirs('3d', exist_ok=True); open('3d/index.html', 'w').write(head + fill(m) + '</html>\n')
+os.makedirs('3d', exist_ok=True); open('3d/index.html', 'w').write(head + fill(m, TINY) + '</html>\n')
 # 3d/index2.html was the gauge-row experiment; the gauges are now a setting on the main page
 open('3d/index2.html', 'w').write('<!doctype html><meta charset="utf-8"><title>Sectional Run</title><meta http-equiv="refresh" content="0; url=./"><a href="./">Sectional Run</a>\n')
 print('index.html', os.path.getsize('index.html') // 1024, 'KB · 3d/index.html', os.path.getsize('3d/index.html') // 1024, 'KB · 3d/index2.html', os.path.getsize('3d/index2.html') // 1024, 'KB')

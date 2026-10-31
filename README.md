@@ -122,6 +122,24 @@ The navigator's Utilities page keeps only navigation functions: heading bug to D
 Settings (or the A key) shows and hides the airspace drawing. Airspace starts hidden. The airspace rules
 always apply, hidden or not.
 
+## The world: Frederick to New York
+
+The game region is a corridor from west of Frederick to just past New York City: 78.2°W to 73.3°W, 38.5°N to
+41.2°N, about 226 × 162 NM. It's set once, as `REG` in `tools/masks.py`, and every build step uses it.
+- **FAA data:** airspace, airports, runways, obstacles and navaids come from `tools/fetch_faa.py`. That includes
+  the Philadelphia and New York Class B, five Class C areas (Harrisburg, Allentown, Atlantic City, Long Island)
+  and the New Jersey restricted areas.
+- **Water and towns** come from the Baltimore–Washington TAC, the New York TAC and the Washington Sectional, in
+  that order of preference. The north-west corner (around Reading and Allentown) is on the New York Sectional,
+  which we don't have yet, so it shows as plain land in the canvas build. The 3D build's streamed charts and base
+  map cover it.
+- **Class B and C approach controls:** each Class B and C is its own airspace, with its own approach control.
+  Its frequency is chosen from your bearing to the primary airport, using the frequency tables on the sectional
+  and New York TAC panels: Potomac, Philadelphia, New York, Harrisburg and Atlantic City. A Bravo clearance only
+  covers that Bravo. Class C needs two-way radio contact, like Class D.
+- **Towers:** tower frequencies along the route come from the same chart tables.
+- **Not yet modelled:** the Hudson River SFRA.
+
 ## Start and map edge
 
 The flight starts 5 NM from Frederick on the direct course to Bay Bridge. That's just clear of the Class D,

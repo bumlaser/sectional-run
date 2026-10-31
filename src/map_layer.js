@@ -10,7 +10,7 @@ const MODES = [{ name: '2D', pitch: 0 }, { name: 'CHASE', pitch: 62 }, { name: '
 let map = null, mapReady = false, viewMode = 2, terrainOn = true, planeT = 0;   // starts in ORBIT
 try { terrainOn = localStorage.getItem('sr.terrain') !== '0'; } catch (_) {}
 function setTerrainOn(on) { terrainOn = on; try { localStorage.setItem('sr.terrain', on ? '1' : '0'); } catch (_) {} if (map) { applyMode(); planeT = 0; } }
-const KCOL = { B: '#1d5fae', D: '#1d5fae', R: '#1d5fae', P: '#1d5fae', SFRA: '#1d5fae', FRZ: '#c9a21a', MOA: '#a8327f', W: '#a8327f', A: '#a8327f', E2: '#a8327f', E5: '#a8327f', MODEC: '#a8327f' };
+const KCOL = { C: '#a8327f', B: '#1d5fae', D: '#1d5fae', R: '#1d5fae', P: '#1d5fae', SFRA: '#1d5fae', FRZ: '#c9a21a', MOA: '#a8327f', W: '#a8327f', A: '#a8327f', E2: '#a8327f', E5: '#a8327f', MODEC: '#a8327f' };
 const fc = feats => ({ type: 'FeatureCollection', features: feats });
 const ringLL = r => { const c = r.map(([x, y]) => toLL(x, y)); c.push(c[0]); return c; };
 // with terrain on, extrusions are measured from the ground, so subtract the mean ground under each volume to stay MSL-true
@@ -24,6 +24,7 @@ const metersLL = (lon, lat, dx, dy) => [lon + dx / (111320 * Math.cos(lat * D2R)
 function volLabel(v) {
   if (v.k === 'B') return `${label100(v.ce)}\n${label100(v.fl)}`;
   if (v.k === 'D') return `[${label100(v.ce)}]`;
+  if (v.k === 'C') return `${label100(v.ce)}\n${v.fl ? label100(v.fl) : 'SFC'}`;
   if (v.k === 'SFRA') return 'WASHINGTON DC SFRA\nSFC–FL180 (APPROX.)';
   if (v.k === 'FRZ') return 'DC FRZ (APPROX.)';
   if (v.k === 'R') return `${v.n}\n${v.fl ? fmt(v.fl) : 'SFC'}–${v.ce >= 60000 ? 'UNLTD' : fmt(v.ce)} ${SUA_STATUS[v.grp] ? 'HOT' : 'COLD'}`;
@@ -110,7 +111,7 @@ function addLayers() {
   map.addLayer({ id: 'frz-fill', type: 'fill', source: 'vol', filter: ['==', ['get', 'k'], 'FRZ'], paint: { 'fill-color': '#f5dd6a', 'fill-opacity': .22 } });
   map.addLayer({ id: 'sua-hatch', type: 'line', source: 'vol', filter: ['in', ['get', 'k'], ['literal', ['R', 'P', 'MOA', 'W', 'A', 'SFRA']]],
     paint: { 'line-color': ['get', 'col'], 'line-width': ['case', ['==', ['get', 'k'], 'SFRA'], 9, 7], 'line-dasharray': [.35, .8], 'line-opacity': .8 } });
-  map.addLayer({ id: 'vol-line', type: 'line', source: 'vol', filter: ['in', ['get', 'k'], ['literal', ['B', 'R', 'P', 'MOA', 'W', 'A', 'SFRA', 'MODEC']]],
+  map.addLayer({ id: 'vol-line', type: 'line', source: 'vol', filter: ['in', ['get', 'k'], ['literal', ['B', 'C', 'R', 'P', 'MOA', 'W', 'A', 'SFRA', 'MODEC']]],
     paint: { 'line-color': ['get', 'col'], 'line-width': ['match', ['get', 'k'], 'B', 2.6, 'MODEC', 1.2, 'SFRA', 2.4, 1.6] } });
   map.addLayer({ id: 'vol-dash', type: 'line', source: 'vol', filter: ['in', ['get', 'k'], ['literal', ['D', 'E2', 'FRZ']]],
     paint: { 'line-color': ['get', 'col'], 'line-width': 2.2, 'line-dasharray': [3, 2] } });
@@ -126,7 +127,7 @@ function addLayers() {
   const ext = (id, kinds, opacity) => map.addLayer({ id, type: 'fill-extrusion', source: 'vol3', filter: ['in', ['get', 'k'], ['literal', kinds]],
     paint: { 'fill-extrusion-color': ['get', 'col'], 'fill-extrusion-base': ['*', ['get', 'b'], FT * EX], 'fill-extrusion-height': ['*', ['get', 't'], FT * EX], 'fill-extrusion-opacity': opacity } });
   // fill-extrusions share one depth buffer: draw small, inner volumes first so the big SFRA/MOA shells don't hide them
-  ext('x-d', ['D'], .22); ext('x-sua', ['R', 'P'], .24); ext('x-b', ['B'], .24); ext('x-moa', ['MOA'], .1); ext('x-sfra', ['SFRA', 'FRZ'], .07);
+  ext('x-d', ['D'], .22); ext('x-c', ['C'], .2); ext('x-sua', ['R', 'P'], .24); ext('x-b', ['B'], .24); ext('x-moa', ['MOA'], .1); ext('x-sfra', ['SFRA', 'FRZ'], .07);
   // symbols
   const font = ['Noto Sans Bold'];
   map.addLayer({ id: 'obs-pt', type: 'circle', source: 'obs', minzoom: 8, paint: { 'circle-radius': 3, 'circle-color': '#1b2c4a', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 } });
@@ -172,7 +173,7 @@ function updatePlane() {
 function applyMode() {
   const three = viewMode !== 0;
   if (map.getSource('dem')) map.setTerrain(three && terrainOn ? { source: 'dem', exaggeration: EX } : null);
-  for (const id of ['x-sfra', 'x-moa', 'x-b', 'x-sua', 'x-d', 'obs3']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', three && (id === 'obs3' || airOn) ? 'visible' : 'none');   // airspace slabs respect the airspace setting
+  for (const id of ['x-sfra', 'x-moa', 'x-b', 'x-c', 'x-sua', 'x-d', 'obs3']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', three && (id === 'obs3' || airOn) ? 'visible' : 'none');   // airspace slabs respect the airspace setting
   if (viewMode === 2) { CAM.bearing = map.getBearing(); CAM.pitchT = MODES[2].pitch; }
   document.getElementById('bView').textContent = MODES[viewMode].name;
 }
@@ -215,7 +216,7 @@ unP = function (sx, sy) { const ll = map.unproject([sx, sy]); return fromLL(ll.l
 viewName = () => MODES[viewMode].name[0] + MODES[viewMode].name.slice(1).toLowerCase();
 toggleView = function () { viewMode = (viewMode + 1) % MODES.length; applyMode(); };
 toggleChart = function () { cam.chart = !cam.chart; for (const id of ['sec', 'tac']) map.setLayoutProperty(id, 'visibility', cam.chart ? 'visible' : 'none'); document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'CHART'; };
-const AIR_LAYERS = ['e5', 'frz-fill', 'sua-hatch', 'vol-line', 'vol-dash', 'vlab', 'x-d', 'x-sua', 'x-b', 'x-moa', 'x-sfra'];
+const AIR_LAYERS = ['e5', 'frz-fill', 'sua-hatch', 'vol-line', 'vol-dash', 'vlab', 'x-d', 'x-c', 'x-sua', 'x-b', 'x-moa', 'x-sfra'];
 const setAir2D = setAir;
 setAir = function (on) { setAir2D(on); if (map && mapReady) { for (const id of AIR_LAYERS) map.setLayoutProperty(id, 'visibility', on && (viewMode !== 0 || !id.startsWith('x-')) ? 'visible' : 'none'); } };   // slabs only in the 3D camera modes
 zoom = function (f) { CAM.zoomT = clamp(CAM.zoomT + Math.log2(f) * 1.2, 5.5, 15.5); };
