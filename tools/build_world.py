@@ -83,6 +83,53 @@ def expand_r4009(vols):
             v.update(fl=0, ce=12500, r=[[[round(pcx + 10 * math.cos(i / 45 * math.pi), 2), round(pcy + 10 * math.sin(i / 45 * math.pi), 2)] for i in range(90)]],
                      lp=[round(pcx, 2), round(pcy + 7, 2)], tou='WHEN A VIP IS AT CAMP DAVID (BY NOTAM)')
 expand_r4009(vols)
+# Hudson River SFRA (14 CFR 93 Subpart W): the Hudson River Exclusion, surface up to but not including 1,300 ft MSL,
+# from Alpine Tower to the Verrazano-Narrows Bridge. Shape: a hand-placed centreline down the river, widened at each
+# step to the shorelines found in the chart-derived water mask, so the corridor follows the real banks.
+# Shorelines are read from the New York TAC at full resolution (~21 m/px): the block-averaged mask calls the narrow,
+# city-lined Hudson "town". Short gaps (labels, airspace lines printed over the water) are stepped over in reach().
+import numpy as _np, lcc as _L
+from PIL import Image as _I; _I.MAX_IMAGE_PIXELS = None
+_nyt = _L.TAC_NY('charts'); _im = _I.open('charts/ny_tac/New York TAC.tif'); _pal = _np.array(_im.getpalette()[:768]).reshape(-1, 3).astype(int); _idx = _np.array(_im)
+_wl = (_pal[:, 2] - _pal[:, 0] >= 25) & (_pal[:, 2] >= _pal[:, 1] - 10) & (_pal[:, 2] >= 100)   # any clearly blue ink: the TAC shades the river in several blues
+def _water(x, y):
+    lat, lon = REG['clat'] - y / 60, REG['clon'] + x / (60 * COS); i, j = _nyt.px(lat, lon); i, j = int(i), int(j)
+    return 0 <= j < _idx.shape[0] and 0 <= i < _idx.shape[1] and bool(_wl[_idx[j, i]])
+HUD_CL = [(40.966, -73.911), (40.958, -73.915), (40.930, -73.916), (40.900, -73.926), (40.878, -73.934), (40.852, -73.952), (40.820, -73.968),
+          (40.800, -73.982), (40.780, -73.996), (40.765, -74.006), (40.750, -74.013), (40.730, -74.019), (40.715, -74.022), (40.700, -74.030),
+          (40.689, -74.042), (40.665, -74.048), (40.640, -74.050), (40.620, -74.047), (40.604, -74.045)]
+HUD_PTS = [('ALP', 'Alpine Tower', 40.958, -73.916), ('GWB', 'George Washington Bridge', 40.852, -73.952), ('INT', 'the Intrepid', 40.765, -74.006),
+           ('SOL', 'the Statue of Liberty', 40.6892, -74.0445), ('VNB', 'the Verrazano-Narrows Bridge', 40.606, -74.045)]
+def hudson():
+    cl = [nm_xy(la, lo) for la, lo in HUD_CL]; samples = []
+    for (ax, ay), (bx, by) in zip(cl, cl[1:]):
+        L = math.hypot(bx - ax, by - ay); n = max(1, int(L / .05))
+        for k in range(n): samples.append((ax + (bx - ax) * k / n, ay + (by - ay) * k / n, (bx - ax) / L, (by - ay) / L))
+    samples.append((*cl[-1], samples[-1][2], samples[-1][3]))
+    left, right = [], []
+    for x, y, ux, uy in samples:
+        px, py = uy, -ux   # perpendicular: +side is east of a southbound centreline
+        if not _water(x, y):   # centreline point on land: re-centre on the nearest water across the river
+            for d in [k * .01 for k in range(1, 61)]:
+                if _water(x + px * d, y + py * d): x, y = x + px * d, y + py * d; break
+                if _water(x - px * d, y - py * d): x, y = x - px * d, y - py * d; break
+        def reach(sg):   # distance to the shore on one side, stepping over up to 0.08 NM of ink on the water
+            d = last = 0
+            while d < .9:
+                d += .01
+                if _water(x + sg * px * d, y + sg * py * d): last = d
+                elif d - last > .08: break
+            return max(last, .12)
+        left.append((x - px * reach(-1), y - py * reach(-1))); right.append((x + px * reach(1), y + py * reach(1)))
+    sm = lambda P: [(sum(q[0] for q in P[max(0, i - 3):i + 4]) / len(P[max(0, i - 3):i + 4]), sum(q[1] for q in P[max(0, i - 3):i + 4]) / len(P[max(0, i - 3):i + 4])) for i in range(len(P))]
+    ring = [[round(x, 3), round(y, 3)] for x, y in sm(left) + sm(right)[::-1]]
+    mid = nm_xy(40.80, -73.982)
+    vols.append({'k': 'HSFRA', 'n': 'Hudson River SFRA', 'fl': 0, 'ce': 1300, 'r': [ring], 'lp': [round(mid[0], 2), round(mid[1], 2)], 'tou': 'CONTINUOUS', 'ag': ''})
+    sx, sy = nm_xy(40.6892, -74.0445)   # the waters round Liberty Island, so you can circle the Statue inside the corridor
+    vols.append({'k': 'HSFRA', 'n': 'Hudson River SFRA', 'fl': 0, 'ce': 1300, 'r': [[[round(sx + .7 * math.cos(i / 24 * math.pi), 3), round(sy + .7 * math.sin(i / 24 * math.pi), 3)] for i in range(48)]],
+                 'lp': [round(sx, 2), round(sy, 2)], 'tou': 'CONTINUOUS', 'ag': '', 'nolab': 1})
+    return {'cl': [[round(x, 3), round(y, 3)] for x, y in cl], 'pts': [{'id': i, 'n': n, 'x': round(nm_xy(la, lo)[0], 3), 'y': round(nm_xy(la, lo)[1], 3)} for i, n, la, lo in HUD_PTS]}
+HUDSON = hudson()
 # airports
 dlinks = {v['id'] for v in vols if v['k'] in ('C', 'D')}   # airports with a Class C or D have a tower
 aps = []
@@ -121,7 +168,7 @@ for f in nav:
     p = f['properties']; lon, lat = f['geometry']['coordinates'][:2]; x, y = nm_xy(lat, lon)
     if inreg(x, y) and 'VOR' in (p['CLASS_TXT'] or ''): vors.append({'id': p['IDENT'], 'n': p['NAME_TXT'], 'x': round(x, 2), 'y': round(y, 2), 'c': p['CLASS_TXT'], 'f': vfreq.get(p['IDENT'])})
 mask = base64.b64encode(open('charts/mask.png', 'rb').read()).decode()
-world = {'reg': {'x0': round(X0, 3), 'y0': round(Y0, 3), 'x1': round(X1, 3), 'y1': round(Y1, 3), 'clat': REG['clat'], 'clon': REG['clon'], 'cos': COS, 'maskPx': 10}, 'vols': vols, 'aps': aps, 'obs': obs, 'vors': vors, 'mask': mask}
+world = {'reg': {'x0': round(X0, 3), 'y0': round(Y0, 3), 'x1': round(X1, 3), 'y1': round(Y1, 3), 'clat': REG['clat'], 'clon': REG['clon'], 'cos': COS, 'maskPx': 10}, 'vols': vols, 'aps': aps, 'obs': obs, 'vors': vors, 'hudson': HUDSON, 'mask': mask}
 open('sectional/world.json', 'w').write(json.dumps(world, separators=(',', ':')))
 import collections
 print('vols', collections.Counter(v['k'] for v in vols), 'aps', len(aps), 'towered', sum(a['tw'] for a in aps), 'obs', len(obs), 'vors', [v['id'] for v in vors])

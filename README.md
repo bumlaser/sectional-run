@@ -138,7 +138,32 @@ The game region is a corridor from west of Frederick to just past New York City:
   and New York TAC panels: Potomac, Philadelphia, New York, Harrisburg and Atlantic City. A Bravo clearance only
   covers that Bravo. Class C needs two-way radio contact, like Class D.
 - **Towers:** tower frequencies along the route come from the same chart tables.
-- **Not yet modelled:** the Hudson River SFRA.
+- **Start choice:** on load, a dialog asks where to start: Frederick, 5 NM out on course, or south of New York,
+  over the Lower Bay at 1,100 ft, heading for the Verrazano.
+
+## Hudson River SFRA (src/hudson.js)
+
+The Hudson River Exclusion runs from the surface up to but not including 1,300 ft MSL, from Alpine Tower to the
+Verrazano-Narrows Bridge, plus the waters round Liberty Island.
+- **Shape:** `tools/build_world.py` follows a hand-placed centreline down the river, and at each step measures the
+  shorelines on the New York TAC at full resolution.
+- **Below 1,300 inside it, the New York Class B doesn't apply.** At 1,300 you're in the Bravo.
+- **Speed and turns:** the plane slows to 90 kt and may bank to 30° (about 7°/s, a turn about 0.4 NM across), so it
+  can turn round in the river, for example at the GWB.
+- **Self-announce:** RADIO → Hudson CTAF (123.05) at each reporting point: Alpine Tower, the GWB, the Intrepid,
+  the Statue of Liberty and the Verrazano. +25 for each call, −25 for each one missed.
+- **Keep right:** southbound on the New Jersey shore, northbound on the Manhattan shore. 15 s on the wrong side
+  costs 25.
+- **Circle the lady:** a full circle round the Statue of Liberty inside the corridor scores 100, up to three times.
+- **Checkride questions:** two, on the 1,300 ft ceiling and the corridor rules.
+
+## New York in 3D
+
+Buildings come from the base map's own OpenStreetMap data (the OpenMapTiles `building` layer, with real
+footprints and heights), drawn at the same 2× vertical scale as the airspace from zoom 13. The Statue of Liberty
+and the George Washington Bridge's towers and deck are modelled by hand. A few landmarks are labelled.
+
+Altitude changes in 100 ft steps (hold ▲ ▼ to keep going; Shift + arrow keys step 500), down to 500 ft.
 
 ## Start and map edge
 

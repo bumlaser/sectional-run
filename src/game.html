@@ -80,6 +80,10 @@
   .seg button { border-radius:0; box-shadow:none; background:#fff; color:var(--primary); padding:7px 10px; min-width:40px; }
   .seg button + button { border-left:1px solid var(--primary); } .seg button.on { background:var(--primary); color:#fff; }
   .set-btn { background:#fff; color:var(--primary); border:1px solid var(--primary); box-shadow:none; padding:7px 12px; }
+  .pick { display:grid; gap:10px; }
+  .pick button { display:block; text-align:left; text-transform:none; letter-spacing:0; padding:14px 16px; background:#fff; color:rgba(0,0,0,.87); border:1px solid var(--border); box-shadow:var(--shadow); }
+  .pick button b { display:block; font:700 17px var(--body); color:var(--primary); margin-bottom:4px; } .pick button span { font:400 14px/1.4 var(--body); color:var(--subtle); }
+  .pick button:active { background:#f2f2f2; }
   .grade { float:right; margin-left:12px; width:64px; height:64px; border-radius:50%; background:#fff; color:#005B4B; font:700 38px/64px var(--body); text-align:center; box-shadow:var(--shadow); }
 </style>
 
@@ -123,7 +127,7 @@
     <p>You've just departed <b>Frederick Muni</b> in <b>N421AP</b>, headed for <b>Bay Bridge</b> on Kent Island. The plane holds 110 knots on its own, so you only steer and pick altitudes. Nothing stalls and nothing crashes. The challenge is reading the chart. The direct line runs straight through the Washington DC SFRA, so you'll need to plan around it, slip under the Baltimore Bravo shelves, and answer checkride questions along the way.</p>
     <div class="notam" id="briefNotam"></div>
     <ul>
-      <li><b>◀ ▶</b> (hold) set the heading bug, and the plane turns to it at standard rate · <b>▲ ▼</b> change target altitude by 500 ft</li>
+      <li><b>◀ ▶</b> (hold) set the heading bug, and the plane turns to it at standard rate · <b>▲ ▼</b> change target altitude by 100 ft (hold to keep going)</li>
       <li><b>RADIO</b> call Potomac Approach, a tower, or self-announce on the CTAF · the <b>cog</b> opens Settings, including airspace (hidden to start; the rules always apply)</li>
       <li><b>3D</b> shows the airspace as stacked slabs · <b>CHART</b> swaps in the real FAA chart</li>
       <li>Tap anything on the map to find out what it is · pinch or <b>− +</b> to zoom · drag to look around</li>
@@ -135,6 +139,12 @@
     <p class="fine">Terrain and MEFs come from AWS Terrain Tiles (USGS 3DEP, SRTM and others, via Mapzen). Airspace, airports, obstacles and VORs come from FAA ADDS data. Water and towns are traced from the FAA Baltimore–Washington TAC. The SFRA and FRZ are approximate rings. This is a practice game: not for navigation, and no substitute for current charts, NOTAMs and SFRA training.</p>
   </div>
 </div>
+<div id="startPick" class="overlay" hidden><div class="card">
+  <header class="bs-head"><h1>Where do you want to start?</h1><h2>N421AP · airborne · 110 knots</h2></header>
+  <div class="pick">
+    <button type="button" data-start="FDK"><b>Frederick (KFDK)</b><span>5 NM out on course for Bay Bridge, climbing to 2,500. The DC SFRA, the Washington Bravo and Camp David are all nearby.</span></button>
+    <button type="button" data-start="NYC"><b>South of New York</b><span>Over the Lower Bay at 1,100 ft, heading for the Verrazano and the Hudson River SFRA. Stay below 1,300, keep right, self-announce, and circle the lady.</span></button>
+  </div></div></div>
 <div id="settings" class="overlay" hidden><div class="card" id="setCard"></div></div>
 <div id="end" class="overlay" hidden><div class="card" id="endCard"></div></div>
 
@@ -216,7 +226,7 @@ const VOL = WD.vols.map((v, i) => {
 const horiz = (v, x, y) => x >= v.bb[0] && x <= v.bb[2] && y >= v.bb[1] && y <= v.bb[3] && inRings(x, y, v.r);
 const insideVol = (v, x, y, alt) => alt >= v.fl && alt < v.ce && horiz(v, x, y);
 const volDist = (v, x, y) => horiz(v, x, y) ? 0 : edgeDist(x, y, v.r);
-const RULED = ['B', 'C', 'D', 'SFRA', 'FRZ', 'P', 'R', 'MOA'];
+const RULED = ['B', 'C', 'D', 'SFRA', 'FRZ', 'P', 'R', 'MOA', 'HSFRA'];
 const TOWERS = WD.obs;
 const VORS = WD.vors.map(v => ({ ...v, r: 5 }));
 const CHECKPOINTS = [['LIBERTY RES', 39.405, -76.905], ['LOCH RAVEN RES', 39.44, -76.545], ['PRETTYBOY RES', 39.625, -76.72], ['SPARROWS POINT', 39.215, -76.475], ['BAY BRIDGE', 38.993, -76.383], ['SUGARLOAF MTN', 39.263, -77.394]]
@@ -303,13 +313,14 @@ function setQuiz(on) { quizOn = on; try { localStorage.setItem('sr.quiz2', on ? 
 const hold = { left: false, right: false }, keys = {};
 const SUA_STATUS = {};
 function newGame() {
-  const crs = brg(START.x, START.y, DEST.x, DEST.y), sx = START.x + Math.sin(crs * D2R) * 5, sy = START.y - Math.cos(crs * D2R) * 5;   // 5 NM out on course: just clear of the Delta
-  pl = { x: sx, y: sy, hdg: crs, bug: crs, alt: 2300, tgt: 2500, vs: 0, rate: 0, bank: 0, patt: 2 };
+  let crs = brg(START.x, START.y, DEST.x, DEST.y), sx = START.x + Math.sin(crs * D2R) * 5, sy = START.y - Math.cos(crs * D2R) * 5, alt = 2300, tgt = 2500;   // 5 NM out on course: just clear of the Delta
+  if (startAt === 'NYC') { [sx, sy] = toNM(40.535, -74.045); const vz = HUD ? HUD.pts.find(p => p.id === 'VNB') : null; crs = vz ? brg(sx, sy, vz.x, vz.y) : 0; alt = tgt = 1100; }   // Lower Bay, for the Verrazano
+  pl = { x: sx, y: sy, hdg: crs, bug: crs, alt, tgt, vs: 0, rate: 0, bank: 0, patt: 2, spd: TAS };
   for (const v of VOL) if (v.k === 'R') SUA_STATUS[v.grp] = v.grp === 'R:R-4009' ? (SUA_STATUS[v.grp] ?? Math.random() < .4)   // R-4009: hot only while a VIP is at Camp David (random each session); P-40 below it is always active
     : /CONT|0000-2400/i.test(v.tou) ? true : (SUA_STATUS[v.grp] ?? Math.random() < .6);
   game = { t: 0, score: 0, log: [], over: false, inside: {}, contact: { 'D:FDK': true }, clrB: {}, asked: {}, quiz: null, correct: 0, quizzes: 0, levelT: 0,
     hemiSegs: {}, towerHits: {}, cityHit: false, ctaf: false, viol: 0, radioLog: [], warned: {}, seenUnder: null };
-  game.radioLog.push({ who: 'TWR', text: 'N421AP, Frederick Tower, frequency change approved. Good day.', t: 0 });
+  if (startAt === 'FDK') game.radioLog.push({ who: 'TWR', text: 'N421AP, Frederick Tower, frequency change approved. Good day.', t: 0 });
   game.nav = { plan: [START.id, DEST.id], wpt: DEST.id, origin: [START.x, START.y], direct: false }; game.lastFac = 'Frederick Tower';
   cam.cx = pl.x; cam.cy = pl.y; cam.px = cam.py = 0; cam.s = clamp(Math.min(W, H) / 18, 14, 40);
   document.getElementById('briefNotam').innerHTML = briefing(); updateLand(true);
@@ -379,6 +390,7 @@ const QUIZ = [
     a: ['No tower. Self-announce your position and intentions on the CTAF', 'Call the tower for a landing clearance', 'It\'s a private field, so you can\'t land'],
     why: 'Magenta symbols mark airports without a control tower. Announce on the CTAF ("Bay Bridge traffic…"), enter the pattern, and keep your eyes open.' },
 ];
+/*__HUDSON__*/
 function hemiQuiz() {
   const crs = norm(pl.hdg + VAR), east = crs < 180, right = east ? [3500, 5500, 7500, 9500] : [4500, 6500, 8500, 10500];
   const pickR = right.reduce((b, a) => Math.abs(a - pl.alt) < Math.abs(b - pl.alt) ? a : b), w1 = pickR + 1000 * (pickR > 4000 ? -1 : 1), w2 = Math.round(pl.alt / 1000) * 1000;
@@ -416,6 +428,7 @@ function facilities() {
   for (const v of VOL) if (v.k === 'C' && CHARLIE[v.id] && AP[v.id] && d2(AP[v.id]) < 20 && !list.some(f => f.g === v.grp)) { const c = CHARLIE[v.id]; FREQ[c.fac] = bravoFreq(c);
     list.push({ g: v.grp, name: c.fac, note: `Class C to ${fmt(v.ce)}`, x: AP[v.id].x, y: AP[v.id].y, act: 'Call' }); }
   for (const v of VOL) if (v.k === 'D' && AP[v.id] && d2(AP[v.id]) < 14 && !list.some(f => f.g === v.grp)) list.push({ g: v.grp, name: TOWER_NAMES[v.id] || AP[v.id].n + ' Tower', note: `Class D to ${fmt(v.ce)}`, x: AP[v.id].x, y: AP[v.id].y, act: 'Call' });
+  const hf = hudFacility(); if (hf) list.push(hf);
   if (d2(DEST) < 16) list.push({ g: 'CTAF', name: 'Bay Bridge CTAF', note: 'self-announce (no tower)', x: DEST.x, y: DEST.y, act: 'Announce' });
   return list;
 }
@@ -429,6 +442,7 @@ function openRadio() {
   showSheet(true);
 }
 function call(g) {
+  if (g === 'HUD') { hudAnnounce(); return openRadio(); }
   if (g === 'QUIZ') { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#9CC9FF', 1.8); return openRadio(); }
   if (g === 'FSS') { game.lastFac = 'Leesburg Radio'; radioMsg('YOU', 'Leesburg Radio, N421AP, request status of the restricted areas along the bay.'); radioMsg('FSS', `N421AP, ${rStatusLine().replace(/<\/?b>/g, '')}. And remember, no SFRA flight plan on file for you.`); return openRadio(); }
   const f = facilities().find(f => f.g === g); if (!f) return; game.lastFac = f.name;
@@ -454,15 +468,17 @@ function call(g) {
 // ====================================================================
 function step(dt) {
   game.t += dt;
+  // speed: 110 kt, slowing to 90 in the Hudson corridor (where it may bank 30°, about 7°/s, to turn round inside the river)
+  const hud = hudIn(); pl.spd += clamp((hud ? 90 : TAS) - pl.spd, -2 * dt, 2 * dt);
   // fly the heading bug: standard-rate turn (3°/s), easing in over the last few degrees
-  const e = angDiff(pl.bug, pl.hdg), trate = Math.sign(e) * Math.min(3, Math.abs(e) * 1.2);
+  const e = angDiff(pl.bug, pl.hdg), trate = Math.sign(e) * Math.min(hud ? 7 : 3, Math.abs(e) * 1.2);
   pl.rate = Math.abs(e) < .05 ? 0 : trate; pl.hdg = norm(pl.hdg + pl.rate * dt); const turn = pl.rate;
-  const bankT = Math.atan(pl.rate * D2R * TAS * 1.6878 / 32.174) / D2R;   // bank for a coordinated turn at this rate
+  const bankT = Math.atan(pl.rate * D2R * pl.spd * 1.6878 / 32.174) / D2R;   // bank for a coordinated turn at this rate
   pl.bank += clamp(bankT - pl.bank, -12 * dt, 12 * dt);
   const dA = pl.tgt - pl.alt, rate = dA > 0 ? 700 / 60 : 800 / 60;
   pl.vs = Math.abs(dA) < 2 ? 0 : Math.sign(dA) * rate; pl.alt += clamp(dA, -rate * dt, rate * dt);
   edgeTurn();
-  pl.x = clamp(pl.x + Math.sin(pl.hdg * D2R) * NMPS * dt, WORLD.x0 + 1, WORLD.x1 - 1); pl.y = clamp(pl.y - Math.cos(pl.hdg * D2R) * NMPS * dt, WORLD.y0 + 1, WORLD.y1 - 1);
+  pl.x = clamp(pl.x + Math.sin(pl.hdg * D2R) * pl.spd / 3600 * dt, WORLD.x0 + 1, WORLD.x1 - 1); pl.y = clamp(pl.y - Math.cos(pl.hdg * D2R) * pl.spd / 3600 * dt, WORLD.y0 + 1, WORLD.y1 - 1);
   pl.patt += clamp((pl.vs > 0 ? 6 : pl.vs < 0 ? -2.5 : 2) - pl.patt, -3 * dt, 3 * dt);   // attitude for the instruments
   game.levelT = (pl.vs === 0 && Math.abs(turn) < .05) ? game.levelT + dt : 0;
   rules();
@@ -478,8 +494,9 @@ function edgeTurn() {
   if (game.t - (game.edgeT ?? -99) > 30) { game.edgeT = game.t; flash('Edge of the map: turning back', '#FFB84D', 2.6); }
 }
 function rules() {
-  const now = {};
-  for (const v of VOL) if ((RULED.includes(v.k) || v.k === 'MODEC') && insideVol(v, pl.x, pl.y, pl.alt)) now[v.grp] = now[v.grp] || v;
+  const now = {}, hud = hudIn();
+  for (const v of VOL) if ((RULED.includes(v.k) || v.k === 'MODEC') && !(hud && v.k === 'B') && insideVol(v, pl.x, pl.y, pl.alt)) now[v.grp] = now[v.grp] || v;
+  hudTick();
   for (const g in now) if (!game.inside[g]) enter(g, now[g]);
   game.inside = now;
   for (const g in now) { const c = game.clrB[g]; if (g.startsWith('B:') && c && pl.alt > c.maxA + 150 && !game.warned['bAlt' + g]) { game.warned['bAlt' + g] = true; addScore(-50, `Above your Bravo altitude (${fmt(c.maxA)})`); } }
@@ -501,6 +518,7 @@ function enter(g, v) {
   else if (v.k === 'P') { game.viol++; addScore(-500, `Flew into prohibited area ${v.n}!`); }
   else if (v.k === 'R') { const vip = g === 'R:R-4009';
     if (SUA_STATUS[g]) { game.viol++; addScore(-300, `Entered ${v.n} while it was active${vip ? ' (VIP at Camp David)' : ''}`); } else flash(`In ${v.n}. ${vip ? 'No VIP at Camp David today' : 'It\'s cold today'}, so that's legal`, '#71CF88'); }
+  else if (v.k === 'HSFRA') flash('Hudson River SFRA: below 1,300, keep right, announce on 123.05', '#9CC9FF', 3.4);
   else if (v.k === 'MOA') flash(`Entering ${v.n}. Watch for military traffic`, '#FFB84D');
 }
 let landShown = null;
@@ -564,6 +582,8 @@ function drawChart2D() {
     if (v.k === 'MODEC') { ctx.strokeStyle = 'rgba(168,50,127,.8)'; ctx.lineWidth = 1.4; ringsPath(v.r); ctx.stroke(); continue; }
     if (v.k === 'E2') { ctx.strokeStyle = MAG; ctx.lineWidth = 2; ctx.setLineDash([8, 5]); ringsPath(v.r); ctx.stroke(); ctx.setLineDash([]); continue; }
     if (v.k === 'B') { ctx.strokeStyle = BLUE; ctx.lineWidth = 2.6; ringsPath(v.r); ctx.stroke(); if (s > 7) frac(label100(v.ce), label100(v.fl), lx, ly, BLUE); continue; }
+    if (v.k === 'HSFRA') { ctx.strokeStyle = BLUE; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ringsPath(v.r); ctx.stroke(); ctx.setLineDash([]);
+      if (!v.nolab && s > 6) { label('HUDSON RIVER SFRA', lx, ly - 6, BLUE, 11, '900'); label('SFC–1,299 · CTAF 123.05', lx, ly + 7, BLUE, 10); } continue; }
     if (v.k === 'C') { ctx.strokeStyle = MAG; ctx.lineWidth = 2.4; ringsPath(v.r); ctx.stroke(); if (s > 7) frac(label100(v.ce), v.fl ? label100(v.fl) : 'SFC', lx, ly, MAG); continue; }
     if (v.k === 'D') { ctx.strokeStyle = BLUE; ctx.lineWidth = 2.2; ctx.setLineDash([9, 6]); ringsPath(v.r); ctx.stroke(); ctx.setLineDash([]);
       const bx = P(v.bb[2], 0)[0] - (P(v.bb[2], 0)[0] - P(v.bb[0], 0)[0]) * .18, by = P(0, v.bb[1])[1] + (P(0, v.bb[3])[1] - P(0, v.bb[1])[1]) * .18;
@@ -643,7 +663,7 @@ function panel(x, y, w, h) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ct
 function txt(s, x, y, font, color, align = 'left') { ctx.font = font; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = color; ctx.fillText(s, x, y); }
 function wrapT(s, maxW) { const words = s.split(' '), out = []; let cur = ''; for (const w of words) { const t = cur ? cur + ' ' + w : w; if (ctx.measureText(t).width > maxW && cur) { out.push(cur); cur = w; } else cur = t; } if (cur) out.push(cur); return out; }
 function airspaceNow() {
-  const ins = VOL.filter(v => RULED.includes(v.k) && insideVol(v, pl.x, pl.y, pl.alt)), names = [...new Set(ins.map(v => v.k === 'B' ? 'Class B' : v.k === 'D' ? `Class D (${v.id})` : v.k === 'C' ? `Class C (${v.id})` : v.k === 'SFRA' ? 'DC SFRA' : v.k === 'FRZ' ? 'DC FRZ' : v.n))];
+  const hud = hudIn(), ins = VOL.filter(v => RULED.includes(v.k) && !(hud && v.k === 'B') && insideVol(v, pl.x, pl.y, pl.alt)), names = [...new Set(ins.map(v => v.k === 'B' ? 'Class B' : v.k === 'D' ? `Class D (${v.id})` : v.k === 'C' ? `Class C (${v.id})` : v.k === 'HSFRA' ? 'Hudson River SFRA' : v.k === 'SFRA' ? 'DC SFRA' : v.k === 'FRZ' ? 'DC FRZ' : v.n))];
   const e2 = VOL.find(v => v.k === 'E2' && insideVol(v, pl.x, pl.y, pl.alt)), under = VOL.filter(v => v.k === 'B' && horiz(v, pl.x, pl.y) && pl.alt < v.fl).sort((a, b) => a.fl - b.fl)[0];
   const veil = VOL.some(v => v.k === 'MODEC' && insideVol(v, pl.x, pl.y, pl.alt));
   const main = names.length ? names.join(' + ') : e2 ? 'Class E (surface)' : 'Class E';
@@ -723,8 +743,8 @@ function drawHUD() {
 }
 function render() {
   drawBase();
-  if (!cam.chart) { if (cam.hz < .001) { const [a, b] = P(WORLD.x0, WORLD.y0), [c, d] = P(WORLD.x1, WORLD.y1); ctx.save(); ctx.beginPath(); ctx.rect(a, b, c - a, d - b); ctx.clip(); drawChart2D(); drawTowers(false); drawAirports(); ctx.restore(); }
-    else { drawLite(); drawAirports(); drawTowers(true); drawVolumes3D(); } }
+  if (!cam.chart) { if (cam.hz < .001) { const [a, b] = P(WORLD.x0, WORLD.y0), [c, d] = P(WORLD.x1, WORLD.y1); ctx.save(); ctx.beginPath(); ctx.rect(a, b, c - a, d - b); ctx.clip(); drawChart2D(); drawTowers(false); drawAirports(); drawHudPts(); ctx.restore(); }
+    else { drawLite(); drawAirports(); drawHudPts(); drawTowers(true); drawVolumes3D(); } }
   else if (cam.hz > .001) drawVolumes3D();
   drawPlane(); drawHUD();
 }
@@ -741,14 +761,20 @@ addEventListener('keydown', e => {
   if (keys[e.code]) return; keys[e.code] = true; if (!running || game.over) return;
   if (game.quiz && !game.quiz.done) { const n = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code]; if (n !== undefined) answerQuiz(n); return; }
   if (!document.getElementById('sheet').hidden) { if (e.code === 'Escape' || e.code === 'Enter') closeSheet(); return; }
-  ({ ArrowUp: () => setTgt(500), ArrowDown: () => setTgt(-500), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyN: () => nav && nav.toggle(), KeyG: () => six && document.getElementById('bInst').classList.toggle('on', six.toggle()), KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#9CC9FF', 1.8); }, KeyL: land, KeyA: () => setAir(!airOn), Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
+  ({ ArrowUp: () => setTgt(e.shiftKey ? 500 : 100), ArrowDown: () => setTgt(e.shiftKey ? -500 : -100), KeyR: openRadio, KeyV: toggleView, KeyC: toggleChart, KeyX: cycleSpeed, KeyP: togglePause, KeyN: () => nav && nav.toggle(), KeyG: () => six && document.getElementById('bInst').classList.toggle('on', six.toggle()), KeyQ: () => { setQuiz(!quizOn); flash(quizOn ? 'Checkride questions ON' : 'Checkride questions OFF: free flight', '#9CC9FF', 1.8); }, KeyL: land, KeyA: () => setAir(!airOn), Equal: () => zoom(1.4), Minus: () => zoom(1 / 1.4) }[e.code] || (() => {}))();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; hold.left = hold.right = false; });
-function setTgt(d) { pl.tgt = clamp(pl.tgt + d, 1000, 12500); }
+function setTgt(d) { pl.tgt = clamp(Math.round((pl.tgt + d) / 100) * 100, 500, 12500); }
 function zoom(f) { cam.s = clamp(cam.s * f, 5, 160); }
 // ---------------- settings (cog button) ----------------
 const CREDITS = () => (typeof map !== 'undefined' ? 'Base map © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors, © OpenMapTiles, served by OpenFreeMap (Positron style). Charts: FAA Aeronautical Information Services. ' : 'Chart: FAA Baltimore–Washington TAC. ') + 'Terrain: AWS Terrain Tiles (USGS 3DEP, SRTM, Mapzen). Airspace, airports, obstacles and navaids: FAA ADDS. Interface: Backstage design system (Apache-2.0).';
+// where the flight starts: picked on load
+let startAt = 'FDK';
+function showStartPick() { document.getElementById('startPick').hidden = false; }
+document.getElementById('startPick').addEventListener('click', e => { const b = e.target.closest('[data-start]'); if (!b) return;
+  startAt = b.dataset.start; document.getElementById('startPick').hidden = true; newGame(); document.getElementById('startBtn').click();
+  if (startAt === 'NYC') flash('Hudson River SFRA ahead: announce at the Verrazano on 123.05', '#9CC9FF', 4); });
 function viewName() { return cam.view === '2d' ? '2D' : '3D'; }
 function openSettings() {
   const sw = (id, on) => `<button type="button" class="sw ${on ? 'on' : ''}" data-set="${id}" role="switch" aria-checked="${on}" aria-label="${id}"></button>`;
@@ -783,7 +809,11 @@ function togglePause() { paused = !paused; document.getElementById('bPause').tex
 const holdBtn = (id, k) => { const b = document.getElementById(id); const on = e => { e.preventDefault(); hold[k] = true; b.classList.add('on'); }, off = () => { hold[k] = false; b.classList.remove('on'); }; b.addEventListener('pointerdown', on); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, off); };
 holdBtn('bLeft', 'left'); holdBtn('bRight', 'right');
 const tap = (id, f) => document.getElementById(id).addEventListener('click', f);
-tap('bUp', () => setTgt(500)); tap('bDown', () => setTgt(-500)); tap('bRadio', () => running && !game.over && openRadio()); tap('bView', () => toggleView()); tap('bChart', () => toggleChart());
+// ▲ ▼: 100 ft a tap; hold to keep going
+const repeatBtn = (id, f) => { const b = document.getElementById(id); let t1 = 0, t2 = 0; const stop = () => { clearTimeout(t1); clearInterval(t2); };
+  b.addEventListener('pointerdown', e => { e.preventDefault(); stop(); f(); t1 = setTimeout(() => { t2 = setInterval(f, 110); }, 380); });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop); };
+repeatBtn('bUp', () => setTgt(100)); repeatBtn('bDown', () => setTgt(-100)); tap('bRadio', () => running && !game.over && openRadio()); tap('bView', () => toggleView()); tap('bChart', () => toggleChart());
 tap('bSpeed', cycleSpeed); tap('bZin', () => zoom(1.4)); tap('bZout', () => zoom(1 / 1.4)); tap('bPause', togglePause); tap('bNav', () => { if (nav) document.getElementById('bNav').classList.toggle('on', nav.toggle()); });
 tap('bAir', () => setAir(!airOn)); tap('bSet', openSettings);
 tap('bInst', () => { if (six) document.getElementById('bInst').classList.toggle('on', six.toggle()); }); tap('landBtn', land);
@@ -832,7 +862,7 @@ function navData() {
   const vf = v => v && v.f ? { freq: v.f.toFixed(2), name: `${v.id} ${v.name}` } : {};   // NAV: nearest VOR active, next nearest in standby
   const stby = facilities().find(f => f.name !== game.lastFac);
   return {
-    gs: TAS, trk: norm(pl.hdg + VAR), dis: d2(wp), dtk: norm(brg(o[0], o[1], wp.x, wp.y) + VAR), wpt: wp.id, direct: N.direct, fpl, nearest: near,
+    gs: Math.round(pl.spd), trk: norm(pl.hdg + VAR), dis: d2(wp), dtk: norm(brg(o[0], o[1], wp.x, wp.y) + VAR), wpt: wp.id, direct: N.direct, fpl, nearest: near,
     map: { range: 20, hdg: pl.hdg, items: AIRPORTS.filter(a => d2(a) < 30).map(a => ({ id: a.id, dx: a.x - pl.x, dy: a.y - pl.y, tw: !!a.tw })), leg: [[o[0] - pl.x, o[1] - pl.y], [wp.x - pl.x, wp.y - pl.y]] },
     com: { active: { name: game.lastFac, freq: FREQ[game.lastFac] }, standby: stby ? { name: stby.name, freq: FREQ[stby.name] } : { name: 'Guard', freq: FREQ.Guard } }, xpdr: { code: game.contact.B ? '4211' : '1200', mode: 'ALT' }, phase: d2(START) < 30 || d2(DEST) < 30 ? 'TERM' : 'ENR', navaid: vor, nav: { active: vf(vors[0]), standby: vf(vors[1]) }, msgs: game.radioLog,
     tfc: FEATURES.traffic && typeof setTraffic === 'function' ? { on: TRAFFIC.on, status: TRAFFIC.status } : null,
@@ -869,11 +899,11 @@ function setGauges(on) {
 }
 setGauges(gaugesOn);
 function sixTick() {
-  if (gaugesOn && gstrip && pl) gstrip.update({ ias: TAS, pitch: pl.patt, roll: pl.bank, alt: pl.alt, baro: 29.92, turn: pl.rate, slip: 0, hdg: norm(pl.hdg + VAR), bug: norm(pl.bug + VAR), vs: pl.vs * 60 });
+  if (gaugesOn && gstrip && pl) gstrip.update({ ias: pl.spd, pitch: pl.patt, roll: pl.bank, alt: pl.alt, baro: 29.92, turn: pl.rate, slip: 0, hdg: norm(pl.hdg + VAR), bug: norm(pl.bug + VAR), vs: pl.vs * 60 });
   if (!six || !pl || !game || !game.nav || !six.visible) return;
   const N = game.nav, wp = ANY(N.wpt) || DEST, o = N.origin, crs = brg(o[0], o[1], wp.x, wp.y);
   const fromO = Math.hypot(pl.x - o[0], pl.y - o[1]), xtk = fromO * Math.sin((brg(o[0], o[1], pl.x, pl.y) - crs) * D2R);   // + = right of course
-  six.update({ ias: TAS, pitch: pl.patt, roll: pl.bank, alt: pl.alt, baro: 29.92, turn: pl.rate, slip: 0, hdg: norm(pl.hdg + VAR), bug: norm(pl.bug + VAR), vs: pl.vs * 60,
+  six.update({ ias: pl.spd, pitch: pl.patt, roll: pl.bank, alt: pl.alt, baro: 29.92, turn: pl.rate, slip: 0, hdg: norm(pl.hdg + VAR), bug: norm(pl.bug + VAR), vs: pl.vs * 60,
     altSel: pl.tgt, crs: norm(crs + VAR), dev: clamp(-xtk / 2, -1, 1), brg: norm(brg(pl.x, pl.y, wp.x, wp.y) + VAR), dist: d2(wp) });   // CDI full scale ±2 NM
 }
 function navTick(now) { if (!nav || !game || !game.nav || !nav.visible || now - navT < 250) return; navT = now; nav.update(navData()); }
@@ -922,7 +952,7 @@ mimg.onload = () => {
   const d = g.getImageData(0, 0, MW, MH).data; MASK = new Uint8Array(MW * MH); for (let k = 0; k < MW * MH; k++) { const v = d[k * 4]; MASK[k] = v > 150 ? 2 : v > 50 ? 1 : 0; }
   for (let j = 0; j < ENY; j++) for (let i = 0; i < ENX; i++) if (isWater(WORLD.x0 + i * EG, WORLD.y0 + j * EG)) EGRID[j * ENX + i] = Math.min(EGRID[j * ENX + i], 60);
   buildBase(); newGame();
-  const b = document.getElementById('startBtn'); b.disabled = false; b.textContent = 'Start flight'; b.click();
+  const b = document.getElementById('startBtn'); b.disabled = false; b.textContent = 'Start flight'; showStartPick();
 };
 mimg.src = 'data:image/png;base64,' + WD.mask;
 if (TAC_SRC.length > 20) { tacImg = new Image(); tacImg.src = TAC_SRC; } else document.getElementById('bChart').hidden = true;

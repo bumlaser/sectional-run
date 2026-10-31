@@ -4,7 +4,7 @@
 import base64, os
 ML = '4.7.1'
 import json
-src = open('src/game.html').read(); _w = json.load(open('data/derived/world.json'))
+src = open('src/game.html').read().replace('/*__HUDSON__*/', open('src/hudson.js').read(), 1); _w = json.load(open('data/derived/world.json'))
 if os.path.exists('data/derived/dem.json'): _w['dem'] = json.load(open('data/derived/dem.json'))
 w = json.dumps(_w, separators=(',', ':'))
 tac = 'data:image/jpeg;base64,' + base64.b64encode(open('data/derived/tac_warp.jpg', 'rb').read()).decode()
@@ -29,14 +29,14 @@ m = patch(m, '<canvas id="c"', '<div id="map" aria-label="Map"></div>\n<canvas i
 m = patch(m, '<button type="button" id="bView">3D</button>', '<button type="button" id="bView">CHASE</button>')
 m = patch(m, '<li><b>3D</b> shows the airspace as stacked slabs · <b>CHART</b> swaps in the real FAA chart</li>',
           '<li><b>CHASE / ORBIT / 2D</b> cycles the camera: track-up behind the plane, free orbit (drag or two-finger twist and tilt), or flat north-up · <b>CHART</b> overlays the real FAA chart</li>')
-m = patch(m, "  buildBase(); newGame();\n  const b = document.getElementById('startBtn'); b.disabled = false; b.textContent = 'Start flight'; b.click();",
+m = patch(m, "  buildBase(); newGame();\n  const b = document.getElementById('startBtn'); b.disabled = false; b.textContent = 'Start flight'; showStartPick();",
           "  base = true; newGame(); maskReady = true; if (typeof enableStart === 'function') enableStart();")
 m = patch(m, "const mimg = new Image();", "let maskReady = false;\nconst mimg = new Image();")
 m = patch(m, "  if (game && base) render();", "  if (game && base && typeof mapReady !== 'undefined' && mapReady) render();")
 m = patch(m, 'The SFRA and FRZ are approximate rings',
           'Base map © OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors, Positron style. Airspace heights are drawn at 2× vertical scale. The SFRA and FRZ are approximate rings')
 layer = open('src/map_layer.js').read() + open('src/live_traffic.js').read() + """
-function enableStart() { if (!(maskReady && mapReady)) return; const b = document.getElementById('startBtn'); b.disabled = false; b.textContent = 'Start flight'; b.click(); }
+function enableStart() { if (!(maskReady && mapReady)) return; const b = document.getElementById('startBtn'); b.disabled = false; b.textContent = 'Start flight'; showStartPick(); }
 function mapReadyHook() { enableStart(); }
 """
 i = m.rindex('</script>\n') + len('</script>\n')   # after the game's own script

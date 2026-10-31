@@ -10,7 +10,7 @@ const MODES = [{ name: '2D', pitch: 0 }, { name: 'CHASE', pitch: 62 }, { name: '
 let map = null, mapReady = false, viewMode = 2, terrainOn = true, planeT = 0;   // starts in ORBIT
 try { terrainOn = localStorage.getItem('sr.terrain') !== '0'; } catch (_) {}
 function setTerrainOn(on) { terrainOn = on; try { localStorage.setItem('sr.terrain', on ? '1' : '0'); } catch (_) {} if (map) { applyMode(); planeT = 0; } }
-const KCOL = { C: '#a8327f', B: '#1d5fae', D: '#1d5fae', R: '#1d5fae', P: '#1d5fae', SFRA: '#1d5fae', FRZ: '#c9a21a', MOA: '#a8327f', W: '#a8327f', A: '#a8327f', E2: '#a8327f', E5: '#a8327f', MODEC: '#a8327f' };
+const KCOL = { HSFRA: '#1d5fae', C: '#a8327f', B: '#1d5fae', D: '#1d5fae', R: '#1d5fae', P: '#1d5fae', SFRA: '#1d5fae', FRZ: '#c9a21a', MOA: '#a8327f', W: '#a8327f', A: '#a8327f', E2: '#a8327f', E5: '#a8327f', MODEC: '#a8327f' };
 const fc = feats => ({ type: 'FeatureCollection', features: feats });
 const ringLL = r => { const c = r.map(([x, y]) => toLL(x, y)); c.push(c[0]); return c; };
 // with terrain on, extrusions are measured from the ground, so subtract the mean ground under each volume to stay MSL-true
@@ -23,6 +23,7 @@ const metersLL = (lon, lat, dx, dy) => [lon + dx / (111320 * Math.cos(lat * D2R)
 
 function volLabel(v) {
   if (v.k === 'B') return `${label100(v.ce)}\n${label100(v.fl)}`;
+  if (v.k === 'HSFRA') return v.nolab ? '' : 'HUDSON RIVER SFRA\nSFC–1,299 · CTAF 123.05';
   if (v.k === 'D') return `[${label100(v.ce)}]`;
   if (v.k === 'C') return `${label100(v.ce)}\n${v.fl ? label100(v.fl) : 'SFC'}`;
   if (v.k === 'SFRA') return 'WASHINGTON DC SFRA\nSFC–FL180 (APPROX.)';
@@ -113,11 +114,31 @@ function addLayers() {
     paint: { 'line-color': ['get', 'col'], 'line-width': ['case', ['==', ['get', 'k'], 'SFRA'], 9, 7], 'line-dasharray': [.35, .8], 'line-opacity': .8 } });
   map.addLayer({ id: 'vol-line', type: 'line', source: 'vol', filter: ['in', ['get', 'k'], ['literal', ['B', 'C', 'R', 'P', 'MOA', 'W', 'A', 'SFRA', 'MODEC']]],
     paint: { 'line-color': ['get', 'col'], 'line-width': ['match', ['get', 'k'], 'B', 2.6, 'MODEC', 1.2, 'SFRA', 2.4, 1.6] } });
-  map.addLayer({ id: 'vol-dash', type: 'line', source: 'vol', filter: ['in', ['get', 'k'], ['literal', ['D', 'E2', 'FRZ']]],
+  map.addLayer({ id: 'vol-dash', type: 'line', source: 'vol', filter: ['in', ['get', 'k'], ['literal', ['D', 'E2', 'FRZ', 'HSFRA']]],
     paint: { 'line-color': ['get', 'col'], 'line-width': 2.2, 'line-dasharray': [3, 2] } });
   map.addLayer({ id: 'route', type: 'line', source: 'route', paint: { 'line-color': '#a8327f', 'line-width': 3, 'line-opacity': .6, 'line-dasharray': [.5, 2] }, layout: { 'line-cap': 'round' } });
   map.addLayer({ id: 'nav-line', type: 'line', source: 'nav', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#1d5fae', 'line-width': 1.2 } });
 
+  // New York in 3D: OpenStreetMap building footprints and heights from the base map's own tiles (OpenMapTiles
+  // 'building' layer, render_height in metres), at the same 2x vertical scale as the airspace. Only drawn zoomed in.
+  const omt = Object.keys(map.getStyle().sources).find(k => map.getStyle().sources[k].type === 'vector');
+  if (omt) map.addLayer({ id: 'bld3', type: 'fill-extrusion', source: omt, 'source-layer': 'building', minzoom: 13,
+    paint: { 'fill-extrusion-color': '#d6d2cb', 'fill-extrusion-height': ['*', ['coalesce', ['get', 'render_height'], 8], EX], 'fill-extrusion-base': ['*', ['coalesce', ['get', 'render_min_height'], 0], EX],
+      'fill-extrusion-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0, 13.6, .92] } });
+  // things OpenStreetMap doesn't map as buildings: the Statue of Liberty (305 ft to the torch, on a star-shaped fort) and the GWB's towers and deck
+  const disc = (lat, lon, r, n = 20) => { const ring = []; for (let i = 0; i <= n; i++) ring.push(metersLL(lon, lat, Math.cos(i / n * 6.283) * r, Math.sin(i / n * 6.283) * r)); return ring; };
+  const slab = (a, b, w) => { const [x0, y0] = fromLL(a[1], a[0]), [x1, y1] = fromLL(b[1], b[0]), L = Math.hypot(x1 - x0, y1 - y0), nx = -(y1 - y0) / L * w / 1852, ny = (x1 - x0) / L * w / 1852;
+    return [[x0 + nx, y0 + ny], [x1 + nx, y1 + ny], [x1 - nx, y1 - ny], [x0 - nx, y0 - ny], [x0 + nx, y0 + ny]].map(([x, y]) => toLL(x, y)); };
+  const LM = [   // [polygon, base m, top m, colour]
+    [disc(40.68925, -74.04450, 28), 0, 47, '#c9c3b5'], [disc(40.68925, -74.04450, 9), 47, 93, '#6fae9b'], [disc(40.68925, -74.04450, 2.5), 93, 103, '#6fae9b'],
+    [slab([40.8530, -73.9600], [40.8530, -73.9592], 12), 0, 184, '#9aa1a8'], [slab([40.8509, -73.9496], [40.8509, -73.9488], 12), 0, 184, '#9aa1a8'],
+    [slab([40.8536, -73.9625], [40.8494, -73.9462], 18), 60, 66, '#8b9298'],
+  ];
+  map.addSource('lm3', { type: 'geojson', data: fc(LM.map(([ring, b, h, c]) => ({ type: 'Feature', properties: { b: b * EX, h: h * EX, c }, geometry: { type: 'Polygon', coordinates: [ring] } }))) });
+  map.addLayer({ id: 'lm3', type: 'fill-extrusion', source: 'lm3', minzoom: 11.5, paint: { 'fill-extrusion-color': ['get', 'c'], 'fill-extrusion-base': ['get', 'b'], 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': .95 } });
+  const LMLAB = [['One World Trade Center', 40.7130, -74.0132], ['Empire State Building', 40.7484, -73.9857], ['Chrysler Building', 40.7516, -73.9755], ['Statue of Liberty', 40.6892, -74.0445], ['George Washington Bridge', 40.8517, -73.9527]];
+  map.addSource('lmlab', { type: 'geojson', data: fc(LMLAB.map(([t, la, lo]) => ({ type: 'Feature', properties: { t }, geometry: { type: 'Point', coordinates: [lo, la] } }))) });
+  if (WD.hudson) map.addSource('hudpts', { type: 'geojson', data: fc(WD.hudson.pts.map(p => pt(p.x, p.y, { t: p.n.replace(/^the /, '').toUpperCase() }))) });
   // 3D airspace, obstacles and plane
   map.addLayer({ id: 'obs3', type: 'fill-extrusion', source: 'obs3', minzoom: 8.5, paint: { 'fill-extrusion-color': '#1b2c4a', 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': .9 } });
   map.addLayer({ id: 'plane-shadow', type: 'fill', source: 'planeFx', filter: ['in', ['get', 'p'], ['literal', ['shadow', 'ring']]], paint: { 'fill-color': ['case', ['==', ['get', 'p'], 'ring'], '#ff6a13', '#000'], 'fill-opacity': ['case', ['==', ['get', 'p'], 'ring'], .85, .28] } });
@@ -127,7 +148,7 @@ function addLayers() {
   const ext = (id, kinds, opacity) => map.addLayer({ id, type: 'fill-extrusion', source: 'vol3', filter: ['in', ['get', 'k'], ['literal', kinds]],
     paint: { 'fill-extrusion-color': ['get', 'col'], 'fill-extrusion-base': ['*', ['get', 'b'], FT * EX], 'fill-extrusion-height': ['*', ['get', 't'], FT * EX], 'fill-extrusion-opacity': opacity } });
   // fill-extrusions share one depth buffer: draw small, inner volumes first so the big SFRA/MOA shells don't hide them
-  ext('x-d', ['D'], .22); ext('x-c', ['C'], .2); ext('x-sua', ['R', 'P'], .24); ext('x-b', ['B'], .24); ext('x-moa', ['MOA'], .1); ext('x-sfra', ['SFRA', 'FRZ'], .07);
+  ext('x-hsfra', ['HSFRA'], .2); ext('x-d', ['D'], .22); ext('x-c', ['C'], .2); ext('x-sua', ['R', 'P'], .24); ext('x-b', ['B'], .24); ext('x-moa', ['MOA'], .1); ext('x-sfra', ['SFRA', 'FRZ'], .07);
   // symbols
   const font = ['Noto Sans Bold'];
   map.addLayer({ id: 'obs-pt', type: 'circle', source: 'obs', minzoom: 8, paint: { 'circle-radius': 3, 'circle-color': '#1b2c4a', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 } });
@@ -141,6 +162,11 @@ function addLayers() {
     paint: { 'text-color': ['get', 'col'], 'text-halo-color': '#fff', 'text-halo-width': 1.6 } });
   map.addLayer({ id: 'nav-lab', type: 'symbol', source: 'nav', filter: ['==', ['geometry-type'], 'Point'], layout: { 'text-field': ['get', 't'], 'text-font': font, 'text-size': 10.5, 'text-offset': [0, 1.1] },
     paint: { 'text-color': ['case', ['has', 'cp'], '#a8327f', '#1d5fae'], 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
+  map.addLayer({ id: 'lmlab', type: 'symbol', source: 'lmlab', minzoom: 11.5, layout: { 'text-field': ['get', 't'], 'text-font': font, 'text-size': 11, 'text-offset': [0, -1.2], 'text-anchor': 'bottom' },
+    paint: { 'text-color': '#3b3f44', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } });
+  if (WD.hudson) { map.addLayer({ id: 'hudpt', type: 'circle', source: 'hudpts', minzoom: 9.5, paint: { 'circle-radius': 5, 'circle-color': '#fff', 'circle-stroke-color': '#1d5fae', 'circle-stroke-width': 2.5, 'circle-pitch-alignment': 'map' } });
+    map.addLayer({ id: 'hudlab', type: 'symbol', source: 'hudpts', minzoom: 9.5, layout: { 'text-field': ['get', 't'], 'text-font': font, 'text-size': 10.5, 'text-anchor': 'left', 'text-offset': [.8, 0] },
+      paint: { 'text-color': '#1d5fae', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } }); }
   map.addLayer({ id: 'vlab', type: 'symbol', source: 'vlab', layout: { 'text-field': ['get', 't'], 'text-font': font, 'text-size': ['match', ['get', 'k'], 'B', 13, 'D', 13, 12], 'text-line-height': 1.05, 'text-allow-overlap': false },
     paint: { 'text-color': ['get', 'col'], 'text-halo-color': 'rgba(255,255,255,.9)', 'text-halo-width': 1.8 } });
   applyMode();
@@ -173,7 +199,7 @@ function updatePlane() {
 function applyMode() {
   const three = viewMode !== 0;
   if (map.getSource('dem')) map.setTerrain(three && terrainOn ? { source: 'dem', exaggeration: EX } : null);
-  for (const id of ['x-sfra', 'x-moa', 'x-b', 'x-c', 'x-sua', 'x-d', 'obs3']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', three && (id === 'obs3' || airOn) ? 'visible' : 'none');   // airspace slabs respect the airspace setting
+  for (const id of ['x-sfra', 'x-moa', 'x-b', 'x-c', 'x-sua', 'x-d', 'x-hsfra', 'obs3']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', three && (id === 'obs3' || airOn) ? 'visible' : 'none');   // airspace slabs respect the airspace setting
   if (viewMode === 2) { CAM.bearing = map.getBearing(); CAM.pitchT = MODES[2].pitch; }
   document.getElementById('bView').textContent = MODES[viewMode].name;
 }
@@ -216,7 +242,7 @@ unP = function (sx, sy) { const ll = map.unproject([sx, sy]); return fromLL(ll.l
 viewName = () => MODES[viewMode].name[0] + MODES[viewMode].name.slice(1).toLowerCase();
 toggleView = function () { viewMode = (viewMode + 1) % MODES.length; applyMode(); };
 toggleChart = function () { cam.chart = !cam.chart; for (const id of ['sec', 'tac']) map.setLayoutProperty(id, 'visibility', cam.chart ? 'visible' : 'none'); document.getElementById('bChart').textContent = cam.chart ? 'MAP' : 'CHART'; };
-const AIR_LAYERS = ['e5', 'frz-fill', 'sua-hatch', 'vol-line', 'vol-dash', 'vlab', 'x-d', 'x-c', 'x-sua', 'x-b', 'x-moa', 'x-sfra'];
+const AIR_LAYERS = ['e5', 'frz-fill', 'sua-hatch', 'vol-line', 'vol-dash', 'vlab', 'x-hsfra', 'x-d', 'x-c', 'x-sua', 'x-b', 'x-moa', 'x-sfra'];
 const setAir2D = setAir;
 setAir = function (on) { setAir2D(on); if (map && mapReady) { for (const id of AIR_LAYERS) map.setLayoutProperty(id, 'visibility', on && (viewMode !== 0 || !id.startsWith('x-')) ? 'visible' : 'none'); } };   // slabs only in the 3D camera modes
 zoom = function (f) { CAM.zoomT = clamp(CAM.zoomT + Math.log2(f) * 1.2, 5.5, 15.5); };
